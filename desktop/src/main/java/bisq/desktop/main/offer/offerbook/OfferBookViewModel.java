@@ -61,13 +61,15 @@ import bisq.core.util.coin.CoinFormatter;
 
 import bisq.network.p2p.NodeAddress;
 import bisq.network.p2p.P2PService;
-
+// import io.grpc.protobuf.ProtoUtils;
 import bisq.common.handlers.ErrorMessageHandler;
 import bisq.common.handlers.ResultHandler;
 
+import org.apache.commons.io.FileUtils;
 import org.bitcoinj.core.Coin;
 
 import com.google.common.base.Joiner;
+// import com.google.protobuf.*; //util.JsonFormat;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
@@ -82,8 +84,11 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.text.DecimalFormat;
-
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -241,6 +246,23 @@ abstract class OfferBookViewModel extends ActivatableViewModel {
         setMarketPriceFeedCurrency();
 
         priceUtil.recalculateBsq30DayAveragePrice();
+
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
+        LocalDateTime now = LocalDateTime.now();
+
+        for (OfferBookListItem item : filteredItems) {
+            String filepath = String.format(
+                    "C:\\Users\\MOthe\\Desktop\\bisq-log\\%s\\%s.pb",
+                    dtf.format(now),
+                    item.getOffer().getId());
+            try (FileOutputStream output = FileUtils.openOutputStream(new File(filepath))) {
+                // output.write(ProtoUtils.util.JsonFormat.printer().print(item.getOffer().toProtoMessage()));
+                // System.out.printf("proto message (((%s)))\n\n\n", item.getOffer().toProtoMessage());
+                item.getOffer().toProtoMessage().writeTo(output);
+            } catch (Exception e) {
+                System.err.printf("~~~ %s\n\n", e);
+            }
+        }
     }
 
     @Override

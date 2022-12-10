@@ -246,23 +246,6 @@ abstract class OfferBookViewModel extends ActivatableViewModel {
         setMarketPriceFeedCurrency();
 
         priceUtil.recalculateBsq30DayAveragePrice();
-
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
-        LocalDateTime now = LocalDateTime.now();
-
-        for (OfferBookListItem item : filteredItems) {
-            String filepath = String.format(
-                    "C:\\Users\\MOthe\\Desktop\\bisq-log\\%s\\%s.pb",
-                    dtf.format(now),
-                    item.getOffer().getId());
-            try (FileOutputStream output = FileUtils.openOutputStream(new File(filepath))) {
-                // output.write(ProtoUtils.util.JsonFormat.printer().print(item.getOffer().toProtoMessage()));
-                // System.out.printf("proto message (((%s)))\n\n\n", item.getOffer().toProtoMessage());
-                item.getOffer().toProtoMessage().writeTo(output);
-            } catch (Exception e) {
-                System.err.printf("~~~ %s\n\n", e);
-            }
-        }
     }
 
     @Override

@@ -66,6 +66,7 @@ public class OfferBookService {
     private final List<OfferBookChangedListener> offerBookChangedListeners = new LinkedList<>();
     private final FilterManager filterManager;
     private final JsonFileManager jsonFileManager;
+    private final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -190,15 +191,34 @@ public class OfferBookService {
     }
 
     public List<Offer> getOffers() {
-        return p2PService.getDataMap().values().stream()
-                .filter(data -> data.getProtectedStoragePayload() instanceof OfferPayloadBase)
-                .map(data -> {
-                    OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
-                    Offer offer = new Offer(offerPayloadBase);
-                    offer.setPriceFeedService(priceFeedService);
-                    return offer;
-                })
-                .collect(Collectors.toList());
+        Collection<Offer> offers = p2PService
+            .getDataMap()
+            .values()
+            .stream()
+            .filter(data -> data.getProtectedStoragePayload() instanceof OfferPayloadBase)
+            .map(data -> {
+                OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
+                Offer offer = new Offer(offerPayloadBase);
+                offer.setPriceFeedService(priceFeedService);
+                return offer;
+            });
+
+            offers.forEach(offer -> {
+                String filepath = String.format(
+                        "C:\\Users\\MOthe\\Desktop\\bisq-log\\%s\\%s.pb",
+                        dtf.format(LocalDateTime.now()),
+                        offer.getId());
+
+                try (FileOutputStream output = FileUtils.openOutputStream(new File(filepath))) {
+                    // output.write(ProtoUtils.util.JsonFormat.printer().print(offer.toProtoMessage()));
+                    // System.out.printf("proto message (((%s)))\n\n\n", offer.toProtoMessage());
+                    offer.toProtoMessage().writeTo(output);
+                } catch (Exception e) {
+                    System.err.printf("~~~ Failed to save offer proto to '%s': %s\n\n", filepath, e);
+                }
+            });
+            
+            return offers.collect(Collectors.toList());
     }
 
     public void removeOfferAtShutDown(OfferPayloadBase offerPayloadBase) {

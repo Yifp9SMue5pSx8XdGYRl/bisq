@@ -30,7 +30,6 @@ import bisq.core.dao.state.DaoStateSnapshotService;
 import bisq.core.dao.state.model.blockchain.Block;
 
 import bisq.network.p2p.P2PService;
-import bisq.network.p2p.network.ConnectionState;
 
 import bisq.common.UserThread;
 import bisq.common.handlers.ResultHandler;
@@ -58,6 +57,8 @@ public class FullNode extends BsqNode {
     private boolean addBlockHandlerAdded;
     private int blocksToParseInBatch;
     private long parseInBatchStartTime;
+    private int parseBlocksOnHeadHeightCounter;
+    private int numExceptions;
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +77,6 @@ public class FullNode extends BsqNode {
         this.rpcService = rpcService;
 
         this.fullNodeNetworkService = fullNodeNetworkService;
-        ConnectionState.setExpectedRequests(5);
     }
 
 
@@ -205,20 +205,24 @@ public class FullNode extends BsqNode {
                     chainHeight,
                     this::onNewBlock,
                     () -> {
-                        // We are done but it might be that new blocks have arrived in the meantime,
+                        // We are done, but it might be that new blocks have arrived in the meantime,
                         // so we try again with startBlockHeight set to current chainHeight
-                        // We also set up the listener in the else main branch where we check
-                        // if we are at chainTip, so do not include here another check as it would
-                        // not trigger the listener registration.
                         parseBlocksIfNewBlockAvailable(chainHeight);
                     }, this::handleError);
         } else {
-            log.warn("We are trying to start with a block which is above the chain height of Bitcoin Core. " +
-                    "We need probably wait longer until Bitcoin Core has fully synced. " +
-                    "We try again after a delay of 1 min.");
-            UserThread.runAfter(() -> rpcService.requestChainHeadHeight(chainHeight1 ->
-                            parseBlocksOnHeadHeight(startBlockHeight, chainHeight1),
-                    this::handleError), 60);
+            parseBlocksOnHeadHeightCounter++;
+            if (parseBlocksOnHeadHeightCounter <= 5) {
+                log.warn("We are trying to start with a block which is above the chain height of Bitcoin Core. " +
+                        "We need to wait longer until Bitcoin Core has fully synced. " +
+                        "We try again after a delay of {} min.", parseBlocksOnHeadHeightCounter * parseBlocksOnHeadHeightCounter);
+                UserThread.runAfter(() -> rpcService.requestChainHeadHeight(height ->
+                                parseBlocksOnHeadHeight(startBlockHeight, height),
+                        this::handleError), parseBlocksOnHeadHeightCounter * parseBlocksOnHeadHeightCounter * 60L);
+            } else {
+                log.warn("We tried {} times to start with startBlockHeight {} which is above the chain height {} of Bitcoin Core. " +
+                                "It might be that Bitcoin Core has not fully synced. We give up now.",
+                        parseBlocksOnHeadHeightCounter, startBlockHeight, chainHeight);
+            }
         }
     }
 
@@ -256,7 +260,24 @@ public class FullNode extends BsqNode {
     }
 
     private void handleError(Throwable throwable) {
-        if (throwable instanceof BlockHashNotConnectingException || throwable instanceof BlockHeightNotConnectingException) {
+        if (throwable instanceof com.googlecode.jsonrpc4j.HttpException) {
+            numExceptions++;
+            if (numExceptions > 10) {
+                log.warn("We got {} RPC HttpExceptions at our block handler.", numExceptions);
+                pendingBlocks.clear();
+                startReOrgFromLastSnapshot();
+                startParseBlocks();
+                numExceptions = 0;
+            }
+            int delayInSec = Math.min(60, numExceptions * numExceptions);
+            log.warn("We got a RPC HttpException at our block handler. Last persisted block height: {}. " +
+                            "We try after a delay of {} sec to request from the last height. error={}",
+                    daoStateService.getBlockHeightOfLastBlock(), delayInSec, throwable.toString());
+            UserThread.runAfter(() -> rpcService.requestChainHeadHeight(
+                            chainHeight -> parseBlocksOnHeadHeight(daoStateService.getBlockHeightOfLastBlock(), chainHeight),
+                            this::handleError),
+                    delayInSec);
+        } else if (throwable instanceof BlockHashNotConnectingException || throwable instanceof BlockHeightNotConnectingException) {
             // We do not escalate that exception as it is handled with the snapshot manager to recover its state.
             log.warn(throwable.toString());
         } else {
@@ -276,6 +297,7 @@ public class FullNode extends BsqNode {
                     } else if (cause instanceof NotificationHandlerException) {
                         log.error("Error from within block notification daemon: {}", cause.getCause().toString());
                         startReOrgFromLastSnapshot();
+                        startParseBlocks();
                         return;
                     } else if (cause instanceof Error) {
                         throw (Error) cause;

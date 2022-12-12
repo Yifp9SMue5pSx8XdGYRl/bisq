@@ -20,6 +20,7 @@ package bisq.desktop.util;
 import bisq.desktop.Navigation;
 import bisq.desktop.app.BisqApp;
 import bisq.desktop.components.AutoTooltipLabel;
+import bisq.desktop.components.BisqScrollPane;
 import bisq.desktop.components.BisqTextArea;
 import bisq.desktop.components.InfoAutoTooltipLabel;
 import bisq.desktop.components.indicator.TxConfidenceIndicator;
@@ -147,6 +148,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import org.jetbrains.annotations.NotNull;
@@ -173,14 +176,12 @@ public class GUIUtil {
     public static TradeCurrency TOP_ALTCOIN = CurrencyUtil.getTradeCurrency("XMR").get();
 
     private static FeeService feeService;
+    @Getter
+    @Setter
     private static Preferences preferences;
 
     public static void setFeeService(FeeService feeService) {
         GUIUtil.feeService = feeService;
-    }
-
-    public static void setPreferences(Preferences preferences) {
-        GUIUtil.preferences = preferences;
     }
 
     public static String getUserLanguage() {
@@ -788,6 +789,9 @@ public class GUIUtil {
     }
 
     public static String getBitcoinURI(String address, Coin amount, String label) {
+        if (amount.isZero()) {
+            amount = null;
+        }
         return address != null ?
                 BitcoinURI.convertToBitcoinURI(Address.fromString(Config.baseCurrencyNetworkParameters(),
                         address), amount, label, null) :
@@ -1264,8 +1268,8 @@ public class GUIUtil {
         }
     }
 
-    public static ScrollPane createScrollPane() {
-        ScrollPane scrollPane = new ScrollPane();
+    public static BisqScrollPane createScrollPane() {
+        BisqScrollPane scrollPane = new BisqScrollPane();
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scrollPane.setFitToWidth(true);

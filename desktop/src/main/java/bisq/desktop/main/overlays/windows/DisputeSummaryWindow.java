@@ -55,6 +55,7 @@ import bisq.core.util.coin.CoinUtil;
 
 import bisq.common.UserThread;
 import bisq.common.app.DevEnv;
+import bisq.common.config.Config;
 import bisq.common.handlers.ResultHandler;
 import bisq.common.util.Tuple2;
 import bisq.common.util.Tuple3;
@@ -80,6 +81,7 @@ import javafx.scene.layout.VBox;
 
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 
 import javafx.beans.binding.Bindings;
 import javafx.beans.value.ChangeListener;
@@ -311,8 +313,7 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
                 formatter.formatCoinWithCode(contract.getOfferPayload().getSellerSecurityDeposit());
         addConfirmationLabelTextField(gridPane, ++rowIndex, Res.get("shared.securityDeposit"), securityDeposit);
 
-        boolean isMediationDispute = getDisputeManager(dispute) instanceof MediationManager;
-        if (isMediationDispute) {
+        if (isMediationDispute()) {
             if (dispute.getTradePeriodEnd().getTime() > 0) {
                 String status = DisplayUtils.formatDateTime(dispute.getTradePeriodEnd());
                 Label tradePeriodEnd = addConfirmationLabelLabel(gridPane, ++rowIndex, Res.get("disputeSummaryWindow.tradePeriodEnd"), status).second;
@@ -350,10 +351,15 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
 
         VBox radioButtonPane = new VBox();
         radioButtonPane.setSpacing(10);
-        radioButtonPane.getChildren().addAll(buyerGetsTradeAmountRadioButton, buyerGetsCompensationRadioButton,
-                buyerGetsTradeAmountMinusPenaltyRadioButton, sellerGetsTradeAmountRadioButton, sellerGetsCompensationRadioButton, sellerGetsTradeAmountMinusPenaltyRadioButton,
-                customRadioButton);
-
+        if (isMediationDispute()) {
+            radioButtonPane.getChildren().addAll(buyerGetsTradeAmountRadioButton, buyerGetsCompensationRadioButton,
+                    buyerGetsTradeAmountMinusPenaltyRadioButton, sellerGetsTradeAmountRadioButton,
+                    sellerGetsCompensationRadioButton, sellerGetsTradeAmountMinusPenaltyRadioButton,
+                    customRadioButton);
+        } else {
+            radioButtonPane.getChildren().addAll(buyerGetsTradeAmountRadioButton, sellerGetsTradeAmountRadioButton,
+                    customRadioButton);
+        }
         addTopLabelWithVBox(gridPane, ++rowIndex, Res.get("disputeSummaryWindow.payout"), radioButtonPane, 0);
 
         tradeAmountToggleGroup = new ToggleGroup();
@@ -435,10 +441,9 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
         }
 
         Contract contract = dispute.getContract();
-        boolean isMediationDispute = getDisputeManager(dispute) instanceof MediationManager;
         // At mediation we require a min. payout to the losing party to keep incentive for the trader to accept the
         // mediated payout. For Refund agent cases we do not have that restriction.
-        Coin minRefundAtDispute = isMediationDispute ? Restrictions.getMinRefundAtMediatedDispute(contract.getTradeAmount()) : Coin.ZERO;
+        Coin minRefundAtDispute = isMediationDispute() ? Restrictions.getMinRefundAtMediatedDispute(contract.getTradeAmount()) : Coin.ZERO;
 
         Offer offer = new Offer(contract.getOfferPayload());
         Coin totalAvailable = contract.getTradeAmount()
@@ -469,7 +474,7 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
             Coin sellerAmountFromField = ParsingUtils.parseToCoin(sellerPayoutAmountInputTextField.getText(), formatter);
             Coin totalAmountFromFields = enteredAmount.add(sellerAmountFromField);
             // RefundAgent can enter less then available
-            if (isMediationDispute ||
+            if (isMediationDispute() ||
                     totalAmountFromFields.compareTo(totalAvailable) > 0) {
                 sellerPayoutAmountInputTextField.setText(formattedCounterPartAmount);
             } else {
@@ -481,7 +486,7 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
             Coin buyerAmountFromField = ParsingUtils.parseToCoin(buyerPayoutAmountInputTextField.getText(), formatter);
             Coin totalAmountFromFields = enteredAmount.add(buyerAmountFromField);
             // RefundAgent can enter less then available
-            if (isMediationDispute ||
+            if (isMediationDispute() ||
                     totalAmountFromFields.compareTo(totalAvailable) > 0) {
                 buyerPayoutAmountInputTextField.setText(formattedCounterPartAmount);
             } else {
@@ -516,8 +521,13 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
 
         VBox vBox = new VBox();
         vBox.setSpacing(25);
-        vBox.getChildren().addAll(hBoxPenalty, hBoxPayouts);
-        GridPane.setMargin(vBox, new Insets(80, 50, 50, 50));
+        vBox.setAlignment(Pos.CENTER);
+        if (isMediationDispute()) {
+            vBox.getChildren().addAll(hBoxPenalty, hBoxPayouts);
+        } else {
+            vBox.getChildren().addAll(hBoxPayouts);
+        }
+        GridPane.setMargin(vBox, new Insets(Layout.FLOATING_LABEL_DISTANCE, 50, 0, 50));
         GridPane.setRowIndex(vBox, rowIndex);
         GridPane.setColumnIndex(vBox, 1);
         gridPane.getChildren().add(vBox);
@@ -692,9 +702,9 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
                     !peersDisputeOptional.get().isClosed()) {
                 showPayoutTxConfirmation(contract,
                         disputeResult,
-                        () -> doCloseIfValid(closeTicketButton));
+                        () -> doCloseAfterTxsVerified(closeTicketButton));
             } else {
-                doCloseIfValid(closeTicketButton);
+                doCloseAfterTxsVerified(closeTicketButton);
             }
         });
 
@@ -808,6 +818,52 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
         } catch (InsufficientMoneyException | WalletException | TransactionVerificationException e) {
             log.error("Exception at doPayout", e);
             new Popup().error(e.toString()).show();
+        }
+    }
+
+    private void doCloseAfterTxsVerified(Button closeTicketButton) {
+        var disputeManager = getDisputeManager(dispute);
+        // Only RefundAgent need to verify transactions to ensure payout is safe
+        if (disputeManager instanceof RefundManager && Config.baseCurrencyNetwork().isMainnet()) {
+            RefundManager refundManager = (RefundManager) disputeManager;
+            Contract contract = dispute.getContract();
+            String makerFeeTxId = contract.getOfferPayload().getOfferFeePaymentTxId();
+            String takerFeeTxId = contract.getTakerFeeTxID();
+            String depositTxId = dispute.getDepositTxId();
+            String delayedPayoutTxId = dispute.getDelayedPayoutTxId();
+            Popup requestingTxsPopup = new Popup().feedback(Res.get("disputeSummaryWindow.requestingTxs"));
+            requestingTxsPopup.show();
+            refundManager.requestBlockchainTransactions(makerFeeTxId,
+                    takerFeeTxId,
+                    depositTxId,
+                    delayedPayoutTxId
+            ).whenComplete((txList, throwable) -> {
+                UserThread.execute(() -> {
+                    requestingTxsPopup.hide();
+
+                    if (throwable == null) {
+                        try {
+                            refundManager.verifyTradeTxChain(txList);
+                            doCloseIfValid(closeTicketButton);
+                        } catch (Throwable error) {
+                            UserThread.runAfter(() ->
+                                            new Popup().warning(Res.get("disputeSummaryWindow.delayedPayoutTxVerificationFailed", error.getMessage()))
+                                                    .show(),
+                                    100,
+                                    TimeUnit.MILLISECONDS);
+                        }
+                    } else {
+                        UserThread.runAfter(() ->
+                                        new Popup().warning(Res.get("disputeSummaryWindow.requestTransactionsError", throwable.getMessage()))
+                                                .onAction(() -> doCloseIfValid(closeTicketButton))
+                                                .show(),
+                                100,
+                                TimeUnit.MILLISECONDS);
+                    }
+                });
+            });
+        } else {
+            doCloseIfValid(closeTicketButton);
         }
     }
 
@@ -987,11 +1043,11 @@ public class DisputeSummaryWindow extends Overlay<DisputeSummaryWindow> {
         if (selectedTradeAmountToggle == buyerGetsTradeAmountRadioButton) {
             disputeResult.setPayoutSuggestion(DisputeResult.PayoutSuggestion.BUYER_GETS_TRADE_AMOUNT);
             disputeResult.setBuyerPayoutAmount(tradeAmount.add(buyerSecurityDeposit));
-            disputeResult.setSellerPayoutAmount(sellerSecurityDeposit);
+            disputeResult.setSellerPayoutAmount(isMediationDispute() ? sellerSecurityDeposit : Coin.ZERO);
             disputeResult.setPayoutAdjustmentPercent("");
         } else if (selectedTradeAmountToggle == sellerGetsTradeAmountRadioButton) {
             disputeResult.setPayoutSuggestion(DisputeResult.PayoutSuggestion.SELLER_GETS_TRADE_AMOUNT);
-            disputeResult.setBuyerPayoutAmount(buyerSecurityDeposit);
+            disputeResult.setBuyerPayoutAmount(isMediationDispute() ? buyerSecurityDeposit : Coin.ZERO);
             disputeResult.setSellerPayoutAmount(tradeAmount.add(sellerSecurityDeposit));
             disputeResult.setPayoutAdjustmentPercent("");
         } else if (selectedTradeAmountToggle == buyerGetsTradeAmountMinusPenaltyRadioButton) {

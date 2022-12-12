@@ -114,6 +114,10 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
         return PERMITTED_MESSAGE_SIZE;
     }
 
+    public static int getMaxPermittedMessageSize() {
+        return MAX_PERMITTED_MESSAGE_SIZE;
+    }
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Class fields
@@ -459,7 +463,6 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
     }
 
     public void shutDown(CloseConnectionReason closeConnectionReason, @Nullable Runnable shutDownCompleteHandler) {
-        log.info("Connection shutdown started");
         log.debug("shutDown: peersNodeAddressOptional={}, closeConnectionReason={}",
                 peersNodeAddressOptional, closeConnectionReason);
 

@@ -53,9 +53,6 @@ public class BtcNodes {
                         new BtcNode("btcnode3.emzy.de", "emzybtc5bnpb2o6gh54oquiox54o4r7yn4a2wiiwzrjonlouaibm2zid.onion", "136.243.53.40", BtcNode.DEFAULT_PORT, "@emzy"),
                         new BtcNode("btcnode4.emzy.de", "emzybtc454ewbviqnmgtgx3rgublsgkk23r4onbhidcv36wremue4kqd.onion", "135.181.215.237", BtcNode.DEFAULT_PORT, "@emzy"),
 
-                        // ripcurlx
-                        new BtcNode("bitcoin.christophatteneder.com", "catlnkpdm454ecngktyo4z22m5dlcvfvgzz4nt5l36eeczecrafslkqd.onion", "174.138.35.229", BtcNode.DEFAULT_PORT, "@Christoph"),
-
                         // mrosseel
                         new BtcNode("btc.vante.me", "bsqbtctulf2g4jtjsdfgl2ed7qs6zz5wqx27qnyiik7laockryvszqqd.onion", "94.23.21.80", BtcNode.DEFAULT_PORT, "@miker"),
                         new BtcNode("btc2.vante.me", "bsqbtcparrfihlwolt4xgjbf4cgqckvrvsfyvy6vhiqrnh4w6ghixoid.onion", "94.23.205.110", BtcNode.DEFAULT_PORT, "@miker"),
@@ -73,10 +70,7 @@ public class BtcNodes {
                         new BtcNode("node130.hnl.wiz.biz", "wizbit5555bsslwv4ctronnsgk5vh2w2pdx7v7eyuivlyuoteejk7lid.onion", "103.99.168.130", BtcNode.DEFAULT_PORT, "@wiz"),
                         new BtcNode("node140.hnl.wiz.biz", "jto2jfbsxhb6yvhcrrjddrgbakte6tgsy3c3z3prss64gndgvovvosyd.onion", "103.99.168.140", BtcNode.DEFAULT_PORT, "@wiz"),
                         new BtcNode("node210.fmt.wiz.biz", "rfqmn3qe36uaptkxhdvi74p4hyrzhir6vhmzb2hqryxodig4gue2zbyd.onion", "103.99.170.210", BtcNode.DEFAULT_PORT, "@wiz"),
-                        new BtcNode("node220.fmt.wiz.biz", "azbpsh4arqlm6442wfimy7qr65bmha2zhgjg7wbaji6vvaug53hur2qd.onion", "103.99.170.220", BtcNode.DEFAULT_PORT, "@wiz"),
-
-                        // KanoczTomas
-                        new BtcNode("btc.ispol.sk", "25q4s3c3eifxfxgsbs56lo2xikyb2vidwkpwb7oi6qzlsysir7qdfsqd.onion", "193.58.196.212", BtcNode.DEFAULT_PORT, "@KanoczTomas")
+                        new BtcNode("node220.fmt.wiz.biz", "azbpsh4arqlm6442wfimy7qr65bmha2zhgjg7wbaji6vvaug53hur2qd.onion", "103.99.170.220", BtcNode.DEFAULT_PORT, "@wiz")
                 ) :
                 new ArrayList<>();
     }

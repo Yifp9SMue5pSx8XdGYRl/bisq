@@ -1956,6 +1956,9 @@ message PreferencesPayload {
     int32 clear_data_after_days = 63;
     string buy_screen_crypto_currency_code = 64;
     string sell_screen_crypto_currency_code = 65;
+    bool use_bitcoin_uris_in_qr_codes = 66;
+    int64 user_defined_trade_limit = 67;
+    bool user_has_raised_trade_limit = 68;
 }
 
 message AutoConfirmSettings {
@@ -2485,4 +2488,30 @@ message MockMailboxPayload {
 message MockPayload {
     string message_version = 1;
     string message = 2;
+}
+
+message ReportingItem {
+    string key = 1;
+    string group = 2;
+    oneof message {
+        StringValueReportingItem string_value_reporting_item = 3;
+        LongValueReportingItem long_value_reporting_item = 4;
+        DoubleValueReportingItem double_value_reporting_item = 5;
+    }
+}
+message StringValueReportingItem {
+    string value = 1;
+}
+
+message LongValueReportingItem {
+    uint64 value = 1;
+}
+
+message DoubleValueReportingItem {
+    double value = 1;
+}
+
+message ReportingItems {
+    string address = 1;
+    repeated ReportingItem reporting_item = 2;
 }

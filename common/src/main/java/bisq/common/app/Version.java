@@ -17,8 +17,14 @@
 
 package bisq.common.app;
 
+import java.net.URL;
+
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -134,6 +140,17 @@ public class Version {
                 ", BASE_CURRENCY_NETWORK=" + BASE_CURRENCY_NETWORK +
                 ", getP2PNetworkId()=" + getP2PMessageVersion() +
                 '}');
+    }
+
+    public static Optional<String> findCommitHash() {
+        try {
+            String pth = Objects.requireNonNull(Version.class.getResource(Version.class.getSimpleName() + ".class")).toString();
+            String mnf = pth.substring(0, pth.lastIndexOf("!") + 1) + "/META-INF/MANIFEST.MF";
+            Attributes attr = new Manifest(new URL(mnf).openStream()).getMainAttributes();
+            return Optional.of(attr.getValue("Implementation-Version"));
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
     }
 
     public static final byte COMPENSATION_REQUEST = (byte) 0x01;

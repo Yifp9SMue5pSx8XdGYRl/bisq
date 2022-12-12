@@ -24,7 +24,7 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
 
     - name: Set up JDK
-      uses: actions/setup-java@a18c333f3f14249953dab3e186e5e21bf3390f1d
+      uses: actions/setup-java@19eeec562b37d29a1ad055b7de9c280bd0906d8d
       with:
         java-version: ${{ matrix.java }}
         distribution: 'zulu'
@@ -33,7 +33,7 @@ jobs:
       run: chmod +x gradlew
 
     - name: Validate Gradle Wrapper JAR files
-      uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+      uses: gradle/wrapper-validation-action@55e685c48d84285a5b0418cd094606e199cca3b6
 
     - name: Build with Gradle
       run: ./gradlew build

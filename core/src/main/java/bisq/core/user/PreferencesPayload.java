@@ -140,6 +140,10 @@ public final class PreferencesPayload implements PersistableEnvelope {
     private boolean denyApiTaker;
     private boolean notifyOnPreRelease;
     private boolean useFullModeDaoMonitor;
+    private boolean useBitcoinUrisInQrCodes = true;
+
+    private long userDefinedTradeLimit = Preferences.INITIAL_TRADE_LIMIT;
+    private boolean userHasRaisedTradeLimit = false;
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Constructor
@@ -209,7 +213,10 @@ public final class PreferencesPayload implements PersistableEnvelope {
                 .setShowOffersMatchingMyAccounts(showOffersMatchingMyAccounts)
                 .setDenyApiTaker(denyApiTaker)
                 .setNotifyOnPreRelease(notifyOnPreRelease)
-                .setUseFullModeDaoMonitor(useFullModeDaoMonitor);
+                .setUseFullModeDaoMonitor(useFullModeDaoMonitor)
+                .setUseBitcoinUrisInQrCodes(useBitcoinUrisInQrCodes)
+                .setUserDefinedTradeLimit(userDefinedTradeLimit)
+                .setUserHasRaisedTradeLimit(userHasRaisedTradeLimit);
 
         Optional.ofNullable(backupDirectory).ifPresent(builder::setBackupDirectory);
         Optional.ofNullable(preferredTradeCurrency).ifPresent(e -> builder.setPreferredTradeCurrency((protobuf.TradeCurrency) e.toProtoMessage()));
@@ -313,7 +320,10 @@ public final class PreferencesPayload implements PersistableEnvelope {
                 proto.getShowOffersMatchingMyAccounts(),
                 proto.getDenyApiTaker(),
                 proto.getNotifyOnPreRelease(),
-                proto.getUseFullModeDaoMonitor()
+                proto.getUseFullModeDaoMonitor(),
+                proto.getUseBitcoinUrisInQrCodes(),
+                proto.getUserHasRaisedTradeLimit() ? proto.getUserDefinedTradeLimit() : Preferences.INITIAL_TRADE_LIMIT,
+                proto.getUserHasRaisedTradeLimit()
         );
     }
 }

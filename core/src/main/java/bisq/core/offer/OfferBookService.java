@@ -17,6 +17,7 @@
 
 package bisq.core.offer;
 
+import java.util.stream.Stream;
 import bisq.core.filter.FilterManager;
 import bisq.core.locale.Res;
 import bisq.core.provider.price.PriceFeedService;
@@ -197,7 +198,7 @@ public class OfferBookService {
     }
 
     public List<Offer> getOffers() {
-        Collection<Offer> offers = p2PService
+        Stream<Offer> offers = p2PService
             .getDataMap()
             .values()
             .stream()

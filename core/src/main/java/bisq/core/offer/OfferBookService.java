@@ -198,7 +198,7 @@ public class OfferBookService {
     }
 
     public List<Offer> getOffers() {
-        Stream<Offer> offers = p2PService
+        return p2PService
             .getDataMap()
             .values()
             .stream()
@@ -207,10 +207,6 @@ public class OfferBookService {
                 OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
                 Offer offer = new Offer(offerPayloadBase);
                 offer.setPriceFeedService(priceFeedService);
-                return offer;
-            });
-
-            offers.forEach(offer -> {
                 String filepath = String.format(
                         "C:\\Users\\MOthe\\Desktop\\bisq-log\\%s\\%s.pb",
                         dtf.format(LocalDateTime.now()),
@@ -223,9 +219,9 @@ public class OfferBookService {
                 } catch (Exception e) {
                     System.err.printf("~~~ Failed to save offer proto to '%s': %s\n\n", filepath, e);
                 }
-            });
-
-            return offers.collect(Collectors.toList());
+                return offer;
+            })
+            .collect(Collectors.toList());
     }
 
     public void removeOfferAtShutDown(OfferPayloadBase offerPayloadBase) {

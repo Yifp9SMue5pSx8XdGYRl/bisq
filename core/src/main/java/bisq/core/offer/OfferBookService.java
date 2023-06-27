@@ -201,12 +201,12 @@ public class OfferBookService {
 
     public List<Offer> getOffers() {
         String now = dtf.format(LocalDateTime.now());
-        String marketFilepath = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\market.pb", now);
-        try (PrintWriter output = new PrintWriter(FileUtils.openOutputStream(new File(filepath)))) {
-            MarketPrice price = priceFeedService.getMarketPrice("BTC/USD");
-            output.printf("{timestamp: %d, price: %f}\n", price.timestampSec, price.price);
+        String marketPriceFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\marketPrice.json", now);
+        try (PrintWriter output = new PrintWriter(FileUtils.openOutputStream(new File(marketPriceFile)))) {
+            MarketPrice price = priceFeedService.getMarketPrice("USD");
+            output.printf("{timestamp: %d, price: %.8f}\n", price.timestampSec, price.price);
         } catch (Exception e) {
-            System.err.printf("~~~ Failed to save market price proto to '%s': %s\n\n", filepath, e);
+            System.err.printf("~~~ Failed to save market price proto to '%s': %s\n\n", marketPriceFile, e);
         }
 
         return p2PService
@@ -218,13 +218,13 @@ public class OfferBookService {
                 OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
                 Offer offer = new Offer(offerPayloadBase);
                 offer.setPriceFeedService(priceFeedService);
-                filepath = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb", now, offer.getId());
-                try (FileOutputStream output = FileUtils.openOutputStream(new File(filepath))) {
+                String offerFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb", now, offer.getId());
+                try (FileOutputStream output = FileUtils.openOutputStream(new File(offerFile))) {
                     // output.write(ProtoUtils.util.JsonFormat.printer().print(offer.toProtoMessage()));
                     // System.out.printf("proto message (((%s)))\n\n\n", offer.toProtoMessage());
                     offer.toProtoMessage().writeTo(output);
                 } catch (Exception e) {
-                    System.err.printf("~~~ Failed to save offer proto to '%s': %s\n\n", filepath, e);
+                    System.err.printf("~~~ Failed to save offer proto to '%s': %s\n\n", offerFile, e);
                 }
                 return offer;
             })

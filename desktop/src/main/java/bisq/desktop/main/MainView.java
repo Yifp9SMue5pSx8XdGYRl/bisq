@@ -514,6 +514,7 @@ public class MainView extends InitializableView<StackPane, MainViewModel>
 
         marketPriceBox.getChildren().addAll(priceComboBox, marketPriceLabel);
 
+        // Might be good to update logs here
         model.getMarketPriceUpdated().addListener((observable, oldValue, newValue) ->
                 updateMarketPriceLabel(marketPriceLabel));
 

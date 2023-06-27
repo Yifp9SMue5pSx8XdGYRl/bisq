@@ -208,7 +208,7 @@ public class OfferBookService {
                 Offer offer = new Offer(offerPayloadBase);
                 offer.setPriceFeedService(priceFeedService);
                 String filepath = String.format(
-                        "C:\\Users\\MOthe\\Desktop\\bisq-log\\%s\\%s.pb",
+                        "C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb",
                         dtf.format(LocalDateTime.now()),
                         offer.getId());
 

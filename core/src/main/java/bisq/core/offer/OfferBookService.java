@@ -203,8 +203,18 @@ public class OfferBookService {
         String now = dtf.format(LocalDateTime.now());
         String marketPriceFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\marketPrice.json", now);
         try (PrintWriter output = new PrintWriter(FileUtils.openOutputStream(new File(marketPriceFile)))) {
-            MarketPrice price = priceFeedService.getMarketPrice("USD");
-            output.printf("{timestamp: %d, price: %.8f}\n", price.timestampSec, price.price);
+            output.printf("""
+                {
+                \"timestamp\": %d,
+                \"price\": {
+                    \"%s\": %.8f,
+                    \"%s\": %.8f
+                }
+                """,
+                price.timestampSec,
+                 "USD", priceFeedService.getMarketPrice("USD").price
+                 "XMR", priceFeedService.getMarketPrice("XMR").price
+                 );
         } catch (Exception e) {
             System.err.printf("~~~ Failed to save market price proto to '%s': %s\n\n", marketPriceFile, e);
         }

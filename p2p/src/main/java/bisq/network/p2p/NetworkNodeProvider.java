@@ -19,7 +19,7 @@ package bisq.network.p2p;
 
 import bisq.network.p2p.network.BridgeAddressProvider;
 import bisq.network.p2p.network.LocalhostNetworkNode;
-import bisq.network.p2p.network.NetworkFilter;
+import bisq.network.p2p.network.BanFilter;
 import bisq.network.p2p.network.NetworkNode;
 import bisq.network.p2p.network.NewTor;
 import bisq.network.p2p.network.RunningTor;
@@ -44,7 +44,8 @@ public class NetworkNodeProvider implements Provider<NetworkNode> {
     @Inject
     public NetworkNodeProvider(NetworkProtoResolver networkProtoResolver,
                                BridgeAddressProvider bridgeAddressProvider,
-                               @Nullable NetworkFilter networkFilter,
+                               @Nullable BanFilter banFilter,
+                               @Named(Config.MAX_CONNECTIONS) int maxConnections,
                                @Named(Config.USE_LOCALHOST_FOR_P2P) boolean useLocalhostForP2P,
                                @Named(Config.NODE_PORT) int port,
                                @Named(Config.TOR_DIR) File torDir,
@@ -56,7 +57,7 @@ public class NetworkNodeProvider implements Provider<NetworkNode> {
                                @Named(Config.TOR_STREAM_ISOLATION) boolean streamIsolation,
                                @Named(Config.TOR_CONTROL_USE_SAFE_COOKIE_AUTH) boolean useSafeCookieAuthentication) {
         if (useLocalhostForP2P) {
-            networkNode = new LocalhostNetworkNode(port, networkProtoResolver, networkFilter);
+            networkNode = new LocalhostNetworkNode(port, networkProtoResolver, banFilter, maxConnections);
         } else {
             TorMode torMode = getTorMode(bridgeAddressProvider,
                     torDir,
@@ -66,7 +67,7 @@ public class NetworkNodeProvider implements Provider<NetworkNode> {
                     password,
                     cookieFile,
                     useSafeCookieAuthentication);
-            networkNode = new TorNetworkNode(port, networkProtoResolver, streamIsolation, torMode, networkFilter);
+            networkNode = new TorNetworkNode(port, networkProtoResolver, streamIsolation, torMode, banFilter, maxConnections);
         }
     }
 

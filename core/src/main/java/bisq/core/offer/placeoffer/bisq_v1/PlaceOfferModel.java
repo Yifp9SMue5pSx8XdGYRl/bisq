@@ -21,6 +21,7 @@ import bisq.core.btc.wallet.BsqWalletService;
 import bisq.core.btc.wallet.BtcWalletService;
 import bisq.core.btc.wallet.TradeWalletService;
 import bisq.core.dao.DaoFacade;
+import bisq.core.dao.burningman.BtcFeeReceiverService;
 import bisq.core.filter.FilterManager;
 import bisq.core.offer.Offer;
 import bisq.core.offer.OfferBookService;
@@ -44,6 +45,7 @@ public class PlaceOfferModel implements Model {
     private final Offer offer;
     private final Coin reservedFundsForOffer;
     private final boolean useSavingsWallet;
+    private final boolean isSharedMakerFee;
     private final BtcWalletService walletService;
     private final TradeWalletService tradeWalletService;
     private final BsqWalletService bsqWalletService;
@@ -51,6 +53,7 @@ public class PlaceOfferModel implements Model {
     private final ArbitratorManager arbitratorManager;
     private final TradeStatisticsManager tradeStatisticsManager;
     private final DaoFacade daoFacade;
+    private final BtcFeeReceiverService btcFeeReceiverService;
     private final User user;
     @Getter
     private final FilterManager filterManager;
@@ -64,6 +67,7 @@ public class PlaceOfferModel implements Model {
     public PlaceOfferModel(Offer offer,
                            Coin reservedFundsForOffer,
                            boolean useSavingsWallet,
+                           boolean isSharedMakerFee,
                            BtcWalletService walletService,
                            TradeWalletService tradeWalletService,
                            BsqWalletService bsqWalletService,
@@ -71,11 +75,13 @@ public class PlaceOfferModel implements Model {
                            ArbitratorManager arbitratorManager,
                            TradeStatisticsManager tradeStatisticsManager,
                            DaoFacade daoFacade,
+                           BtcFeeReceiverService btcFeeReceiverService,
                            User user,
                            FilterManager filterManager) {
         this.offer = offer;
         this.reservedFundsForOffer = reservedFundsForOffer;
         this.useSavingsWallet = useSavingsWallet;
+        this.isSharedMakerFee = isSharedMakerFee;
         this.walletService = walletService;
         this.tradeWalletService = tradeWalletService;
         this.bsqWalletService = bsqWalletService;
@@ -83,6 +89,7 @@ public class PlaceOfferModel implements Model {
         this.arbitratorManager = arbitratorManager;
         this.tradeStatisticsManager = tradeStatisticsManager;
         this.daoFacade = daoFacade;
+        this.btcFeeReceiverService = btcFeeReceiverService;
         this.user = user;
         this.filterManager = filterManager;
     }

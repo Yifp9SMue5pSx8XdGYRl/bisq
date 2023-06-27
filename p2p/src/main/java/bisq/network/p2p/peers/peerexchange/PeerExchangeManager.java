@@ -136,7 +136,7 @@ public class PeerExchangeManager implements MessageListener, ConnectionListener,
 
     @Override
     public void onDisconnect(CloseConnectionReason closeConnectionReason, Connection connection) {
-        log.info("onDisconnect closeConnectionReason={}, nodeAddressOpt={}", closeConnectionReason, connection.getPeersNodeAddressOptional());
+        log.debug("onDisconnect closeConnectionReason={}, nodeAddressOpt={}", closeConnectionReason, connection.getPeersNodeAddressOptional());
         closeHandler(connection);
 
         if (retryTimer == null) {
@@ -150,10 +150,6 @@ public class PeerExchangeManager implements MessageListener, ConnectionListener,
         if (peerManager.isPeerBanned(closeConnectionReason, connection)) {
             connection.getPeersNodeAddressOptional().ifPresent(seedNodeAddresses::remove);
         }
-    }
-
-    @Override
-    public void onError(Throwable throwable) {
     }
 
 

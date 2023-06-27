@@ -59,8 +59,9 @@ import static bisq.desktop.util.FormBuilder.addButtonBusyAnimationLabelAfterGrou
 public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
 
     private BusyAnimation busyAnimation;
-    private Button confirmButton;
+    private Button confirmEditButton;
     private Button cancelButton;
+    private Label spinnerInfoLabel;
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Constructor, lifecycle
@@ -170,11 +171,11 @@ public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     private void addBindings() {
-        confirmButton.disableProperty().bind(model.isNextButtonDisabled);
+        confirmEditButton.disableProperty().bind(model.isNextButtonDisabled);
     }
 
     private void removeBindings() {
-        confirmButton.disableProperty().unbind();
+        confirmEditButton.disableProperty().unbind();
     }
 
     @Override
@@ -195,28 +196,36 @@ public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
         editOfferConfirmationBox.setAlignment(Pos.CENTER_LEFT);
         GridPane.setHalignment(editOfferConfirmationBox, HPos.LEFT);
 
-        confirmButton = editOfferTuple.first;
-        confirmButton.setMinHeight(40);
-        confirmButton.setPadding(new Insets(0, 20, 0, 20));
-        confirmButton.setGraphicTextGap(10);
+        confirmEditButton = editOfferTuple.first;
+        confirmEditButton.setMinHeight(40);
+        confirmEditButton.setPadding(new Insets(0, 20, 0, 20));
+        confirmEditButton.setGraphicTextGap(10);
 
         busyAnimation = editOfferTuple.second;
-        Label spinnerInfoLabel = editOfferTuple.third;
+        spinnerInfoLabel = editOfferTuple.third;
 
         cancelButton = new AutoTooltipButton(Res.get("shared.cancel"));
         cancelButton.setDefaultButton(false);
         cancelButton.setOnAction(event -> close());
         editOfferConfirmationBox.getChildren().add(cancelButton);
 
-        confirmButton.setOnAction(e -> {
-            confirmButton.requestFocus();   // fix issue #5460 (when enter key used, focus is wrong)
-            if (model.isPriceInRange()) {
-                model.isNextButtonDisabled.setValue(true);
-                cancelButton.setDisable(true);
-                busyAnimation.play();
-                spinnerInfoLabel.setText(Res.get("editOffer.publishOffer"));
-                //edit offer
-                model.onPublishOffer(() -> {
+        confirmEditButton.setOnAction(e -> {
+            confirmEditButton.requestFocus();   // fix issue #5460 (when enter key used, focus is wrong)
+            onConfirmEdit();
+        });
+    }
+
+    private void onConfirmEdit() {
+        if (model.isPriceInRange()) {
+            model.isNextButtonDisabled.setValue(true);
+            cancelButton.setDisable(true);
+            busyAnimation.play();
+            spinnerInfoLabel.setText(Res.get("editOffer.publishOffer"));
+
+            model.onPublishOffer(() -> {
+                if (model.dataModel.cannotActivateOffer()) {
+                    new Popup().warning(Res.get("editOffer.cannotActivateOffer")).show();
+                } else {
                     String key = "editOfferSuccess";
                     if (DontShowAgainLookup.showAgain(key)) {
                         new Popup()
@@ -224,19 +233,19 @@ public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
                                 .dontShowAgainId(key)
                                 .show();
                     }
-                    spinnerInfoLabel.setText("");
-                    busyAnimation.stop();
-                    close();
-                }, (message) -> {
-                    log.error(message);
-                    spinnerInfoLabel.setText("");
-                    busyAnimation.stop();
-                    model.isNextButtonDisabled.setValue(false);
-                    cancelButton.setDisable(false);
-                    new Popup().warning(Res.get("editOffer.failed", message)).show();
-                });
-            }
-        });
+                }
+                spinnerInfoLabel.setText("");
+                busyAnimation.stop();
+                close();
+            }, (message) -> {
+                log.error(message);
+                spinnerInfoLabel.setText("");
+                busyAnimation.stop();
+                model.isNextButtonDisabled.setValue(false);
+                cancelButton.setDisable(false);
+                new Popup().warning(Res.get("editOffer.failed", message)).show();
+            });
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -246,7 +255,7 @@ public class EditOfferView extends MutableOfferView<EditOfferViewModel> {
     private void updateElementsWithDirection() {
         ImageView iconView = new ImageView();
         iconView.setId(model.isShownAsSellOffer() ? "image-sell-white" : "image-buy-white");
-        confirmButton.setGraphic(iconView);
-        confirmButton.setId(model.isShownAsSellOffer() ? "sell-button-big" : "buy-button-big");
+        confirmEditButton.setGraphic(iconView);
+        confirmEditButton.setId(model.isShownAsSellOffer() ? "sell-button-big" : "buy-button-big");
     }
 }

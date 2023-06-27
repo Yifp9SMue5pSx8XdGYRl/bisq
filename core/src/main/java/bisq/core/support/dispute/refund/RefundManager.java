@@ -21,6 +21,7 @@ import bisq.core.btc.setup.WalletsSetup;
 import bisq.core.btc.wallet.BtcWalletService;
 import bisq.core.btc.wallet.TradeWalletService;
 import bisq.core.dao.DaoFacade;
+import bisq.core.dao.burningman.DelayedPayoutTxReceiverService;
 import bisq.core.locale.Res;
 import bisq.core.offer.OpenOffer;
 import bisq.core.offer.OpenOfferManager;
@@ -50,11 +51,13 @@ import bisq.common.app.Version;
 import bisq.common.config.Config;
 import bisq.common.crypto.KeyRing;
 import bisq.common.util.Hex;
+import bisq.common.util.Tuple2;
 
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutPoint;
+import org.bitcoinj.core.TransactionOutput;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -74,7 +77,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 @Slf4j
 @Singleton
 public final class RefundManager extends DisputeManager<RefundDisputeList> {
+    private final DelayedPayoutTxReceiverService delayedPayoutTxReceiverService;
     private final MempoolService mempoolService;
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Constructor
@@ -89,6 +94,7 @@ public final class RefundManager extends DisputeManager<RefundDisputeList> {
                          ClosedTradableManager closedTradableManager,
                          OpenOfferManager openOfferManager,
                          DaoFacade daoFacade,
+                         DelayedPayoutTxReceiverService delayedPayoutTxReceiverService,
                          KeyRing keyRing,
                          RefundDisputeListService refundDisputeListService,
                          Config config,
@@ -96,6 +102,7 @@ public final class RefundManager extends DisputeManager<RefundDisputeList> {
                          MempoolService mempoolService) {
         super(p2PService, tradeWalletService, walletService, walletsSetup, tradeManager, closedTradableManager,
                 openOfferManager, daoFacade, keyRing, refundDisputeListService, config, priceFeedService);
+        this.delayedPayoutTxReceiverService = delayedPayoutTxReceiverService;
 
         this.mempoolService = mempoolService;
     }
@@ -151,7 +158,7 @@ public final class RefundManager extends DisputeManager<RefundDisputeList> {
         String roleContextMsg = Res.get("support.initialArbitratorMsg",
                 DisputeAgentLookupMap.getMatrixLinkForAgent(getAgentNodeAddress(dispute).getFullAddress()));
         String link = "https://bisq.wiki/Dispute_resolution#Level_3:_Arbitration";
-        return Res.get("support.initialInfo", role, roleContextMsg, role, link);
+        return Res.get("support.initialInfoRefundAgent", role, roleContextMsg, role, link);
     }
 
     @Override
@@ -257,6 +264,14 @@ public final class RefundManager extends DisputeManager<RefundDisputeList> {
                                                                               String takerFeeTxId,
                                                                               String depositTxId,
                                                                               String delayedPayoutTxId) {
+        // in regtest mode, simulate a delay & failure obtaining the blockchain transactions
+        // since we cannot request them in regtest anyway.  this is useful for checking failure scenarios
+        if (!Config.baseCurrencyNetwork().isMainnet()) {
+            CompletableFuture<List<Transaction>> retFuture = new CompletableFuture<>();
+            UserThread.runAfter(() -> retFuture.complete(new ArrayList<>()), 5);
+            return retFuture;
+        }
+
         NetworkParameters params = btcWalletService.getParams();
         List<Transaction> txs = new ArrayList<>();
         return mempoolService.requestTxAsHex(makerFeeTxId)
@@ -307,5 +322,31 @@ public final class RefundManager extends DisputeManager<RefundDisputeList> {
         String fundingTxId = delayedPayoutTxInputOutpoint.getHash().toString();
         checkArgument(fundingTxId.equals(depositTx.getTxId().toString()),
                 "First input at delayedPayoutTx does not connect to depositTx");
+    }
+
+    public void verifyDelayedPayoutTxReceivers(Transaction delayedPayoutTx, Dispute dispute) {
+        Transaction depositTx = dispute.findDepositTx(btcWalletService).orElseThrow();
+        long inputAmount = depositTx.getOutput(0).getValue().value;
+        int selectionHeight = dispute.getBurningManSelectionHeight();
+
+        boolean wasBugfix6699ActivatedAtTradeDate = dispute.getTradeDate().after(DelayedPayoutTxReceiverService.BUGFIX_6699_ACTIVATION_DATE);
+        List<Tuple2<Long, String>> delayedPayoutTxReceivers = delayedPayoutTxReceiverService.getReceivers(
+                selectionHeight,
+                inputAmount,
+                dispute.getTradeTxFee(),
+                wasBugfix6699ActivatedAtTradeDate);
+        log.info("Verify delayedPayoutTx using selectionHeight {} and receivers {}", selectionHeight, delayedPayoutTxReceivers);
+        checkArgument(delayedPayoutTx.getOutputs().size() == delayedPayoutTxReceivers.size(),
+                "Size of outputs and delayedPayoutTxReceivers must be the same");
+
+        NetworkParameters params = btcWalletService.getParams();
+        for (int i = 0; i < delayedPayoutTx.getOutputs().size(); i++) {
+            TransactionOutput transactionOutput = delayedPayoutTx.getOutputs().get(i);
+            Tuple2<Long, String> receiverTuple = delayedPayoutTxReceivers.get(0);
+            checkArgument(transactionOutput.getScriptPubKey().getToAddress(params).toString().equals(receiverTuple.second),
+                    "output address does not match delayedPayoutTxReceivers address. transactionOutput=" + transactionOutput);
+            checkArgument(transactionOutput.getValue().value == receiverTuple.first,
+                    "output value does not match delayedPayoutTxReceivers value. transactionOutput=" + transactionOutput);
+        }
     }
 }

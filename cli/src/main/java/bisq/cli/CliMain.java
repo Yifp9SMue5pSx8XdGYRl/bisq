@@ -72,6 +72,7 @@ import bisq.cli.opts.GetPaymentAcctFormOptionParser;
 import bisq.cli.opts.GetTradeOptionParser;
 import bisq.cli.opts.GetTradesOptionParser;
 import bisq.cli.opts.GetTransactionOptionParser;
+import bisq.cli.opts.GetTransactionsOptionParser;
 import bisq.cli.opts.OfferIdOptionParser;
 import bisq.cli.opts.RegisterDisputeAgentOptionParser;
 import bisq.cli.opts.RemoveWalletPasswordOptionParser;
@@ -346,6 +347,16 @@ public class CliMain {
                     out.println(formatTxFeeRateInfo(txFeeRate));
                     return;
                 }
+                case gettransactions: {
+                    var opts = new GetTransactionsOptionParser(args).parse();
+                    if (opts.isForHelp()) {
+                        out.println(client.getMethodHelp(method));
+                        return;
+                    }
+                    var txs = client.getTransactions();
+                    new TableBuilder(TRANSACTION_TBL, txs).build().print(out);
+                    return;
+                }
                 case gettransaction: {
                     var opts = new GetTransactionOptionParser(args).parse();
                     if (opts.isForHelp()) {
@@ -468,7 +479,8 @@ public class CliMain {
                     }
                     var direction = opts.getDirection();
                     var currencyCode = opts.getCurrencyCode();
-                    List<OfferInfo> offers = client.getOffers(direction, currencyCode);
+                    var all = opts.getAll();
+                    List<OfferInfo> offers = client.getOffers(direction, currencyCode, all);
                     if (offers.isEmpty())
                         out.printf("no %s %s offers found%n", direction, currencyCode);
                     else
@@ -881,6 +893,8 @@ public class CliMain {
             stream.format(rowFormat, settxfeerate.name(), "--tx-fee-rate=<sats/byte>", "Set custom tx fee rate in sats/byte");
             stream.println();
             stream.format(rowFormat, unsettxfeerate.name(), "", "Unset custom tx fee rate");
+            stream.println();
+            stream.format(rowFormat, gettransactions.name(), "", "Get transactions");
             stream.println();
             stream.format(rowFormat, gettransaction.name(), "--transaction-id=<transaction-id>", "Get transaction with id");
             stream.println();

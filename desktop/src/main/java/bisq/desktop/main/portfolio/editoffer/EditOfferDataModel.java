@@ -63,8 +63,9 @@ import java.util.stream.Collectors;
 class EditOfferDataModel extends MutableOfferDataModel {
 
     private final CorePersistenceProtoResolver corePersistenceProtoResolver;
-    private OpenOffer openOffer;
+    private OpenOffer originalOpenOffer;
     private OpenOffer.State initialState;
+    private Offer editedOffer;
 
     @Inject
     EditOfferDataModel(CreateOfferService createOfferService,
@@ -117,7 +118,7 @@ class EditOfferDataModel extends MutableOfferDataModel {
     }
 
     public void applyOpenOffer(OpenOffer openOffer) {
-        this.openOffer = openOffer;
+        this.originalOpenOffer = openOffer;
 
         Offer offer = openOffer.getOffer();
         direction = offer.getDirection();
@@ -175,21 +176,21 @@ class EditOfferDataModel extends MutableOfferDataModel {
     }
 
     public void populateData() {
-        Offer offer = openOffer.getOffer();
+        Offer offer = originalOpenOffer.getOffer();
         // Min amount need to be set before amount as if minAmount is null it would be set by amount
         setMinAmount(offer.getMinAmount());
         setAmount(offer.getAmount());
         setPrice(offer.getPrice());
         setVolume(offer.getVolume());
         setUseMarketBasedPrice(offer.isUseMarketBasedPrice());
-        setTriggerPrice(openOffer.getTriggerPrice());
+        setTriggerPrice(originalOpenOffer.getTriggerPrice());
         if (offer.isUseMarketBasedPrice()) {
             setMarketPriceMargin(offer.getMarketPriceMargin());
         }
     }
 
     public void onStartEditOffer(ErrorMessageHandler errorMessageHandler) {
-        openOfferManager.editOpenOfferStart(openOffer, () -> {
+        openOfferManager.editOpenOfferStart(originalOpenOffer, () -> {
         }, errorMessageHandler);
     }
 
@@ -201,19 +202,33 @@ class EditOfferDataModel extends MutableOfferDataModel {
 
         OfferPayload offerPayload = offer.getOfferPayload().orElseThrow();
         var mutableOfferPayloadFields = new MutableOfferPayloadFields(offerPayload);
-        OfferPayload editedPayload = offerUtil.getMergedOfferPayload(openOffer, mutableOfferPayloadFields);
-        Offer editedOffer = new Offer(editedPayload);
+        OfferPayload editedPayload = offerUtil.getMergedOfferPayload(originalOpenOffer, mutableOfferPayloadFields);
+        editedOffer = new Offer(editedPayload);
         editedOffer.setPriceFeedService(priceFeedService);
         editedOffer.setState(Offer.State.AVAILABLE);
         openOfferManager.editOpenOfferPublish(editedOffer, triggerPrice, initialState, () -> {
-            openOffer = null;
+            if (cannotActivateOffer()) {
+                OpenOffer editedOpenOffer = openOfferManager.getOpenOfferById(editedOffer.getId()).orElseThrow();
+                editedOpenOffer.setState(OpenOffer.State.DEACTIVATED);
+            }
             resultHandler.handleResult();
+            originalOpenOffer = null;
+            editedOffer = null;
         }, errorMessageHandler);
     }
 
     public void onCancelEditOffer(ErrorMessageHandler errorMessageHandler) {
-        if (openOffer != null)
-            openOfferManager.editOpenOfferCancel(openOffer, initialState, () -> {
+        if (originalOpenOffer != null)
+            openOfferManager.editOpenOfferCancel(originalOpenOffer, initialState, () -> {
             }, errorMessageHandler);
+    }
+
+    public boolean cannotActivateOffer() {
+        // The cannotActivateOffer check considers only activated offers but at editing offer we have set the
+        // offer DEACTIVATED. We temporarily flip the state so that our cannotActivateOffer works as expected.
+        originalOpenOffer.setState(OpenOffer.State.AVAILABLE);
+        boolean result = openOfferManager.cannotActivateOffer(editedOffer);
+        originalOpenOffer.setState(OpenOffer.State.DEACTIVATED);
+        return result;
     }
 }

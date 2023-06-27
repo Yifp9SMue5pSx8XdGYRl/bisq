@@ -33,50 +33,54 @@ import org.slf4j.LoggerFactory;
 
 import org.jetbrains.annotations.Nullable;
 
-// Runs in UserThread
 class Server implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(Server.class);
 
     private final MessageListener messageListener;
     private final ConnectionListener connectionListener;
     @Nullable
-    private final NetworkFilter networkFilter;
+    private final BanFilter banFilter;
 
-    // accessed from different threads
     private final ServerSocket serverSocket;
+    private final int localPort;
     private final Set<Connection> connections = new CopyOnWriteArraySet<>();
-    private volatile boolean stopped;
     private final NetworkProtoResolver networkProtoResolver;
+    private final Thread serverThread = new Thread(this);
 
 
     public Server(ServerSocket serverSocket,
                   MessageListener messageListener,
                   ConnectionListener connectionListener,
                   NetworkProtoResolver networkProtoResolver,
-                  @Nullable NetworkFilter networkFilter) {
+                  @Nullable BanFilter banFilter) {
         this.networkProtoResolver = networkProtoResolver;
         this.serverSocket = serverSocket;
+        this.localPort = serverSocket.getLocalPort();
         this.messageListener = messageListener;
         this.connectionListener = connectionListener;
-        this.networkFilter = networkFilter;
+        this.banFilter = banFilter;
+    }
+
+    public void start() {
+        serverThread.setName("Server-" + localPort);
+        serverThread.start();
     }
 
     @Override
     public void run() {
         try {
-            // Thread created by NetworkNode
-            Thread.currentThread().setName("Server-" + serverSocket.getLocalPort());
             try {
-                while (!stopped && !Thread.currentThread().isInterrupted()) {
-                    log.debug("Ready to accept new clients on port " + serverSocket.getLocalPort());
+                while (isServerActive()) {
+                    log.debug("Ready to accept new clients on port " + localPort);
                     final Socket socket = serverSocket.accept();
-                    if (!stopped && !Thread.currentThread().isInterrupted()) {
+
+                    if (isServerActive()) {
                         log.debug("Accepted new client on localPort/port " + socket.getLocalPort() + "/" + socket.getPort());
                         InboundConnection connection = new InboundConnection(socket,
                                 messageListener,
                                 connectionListener,
                                 networkProtoResolver,
-                                networkFilter);
+                                banFilter);
 
                         log.debug("\n\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n" +
                                 "Server created new inbound connection:"
@@ -84,14 +88,14 @@ class Server implements Runnable {
                                 + "\nconnection.uid={}", serverSocket.getLocalPort(), socket.getPort(), connection.getUid()
                                 + "\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
 
-                        if (!stopped)
+                        if (isServerActive())
                             connections.add(connection);
                         else
                             connection.shutDown(CloseConnectionReason.APP_SHUT_DOWN);
                     }
                 }
             } catch (IOException e) {
-                if (!stopped)
+                if (isServerActive())
                     e.printStackTrace();
             }
         } catch (Throwable t) {
@@ -102,14 +106,14 @@ class Server implements Runnable {
 
     public void shutDown() {
         log.info("Server shutdown started");
-        if (!stopped) {
-            stopped = true;
-
+        if (isServerActive()) {
+            serverThread.interrupt();
             connections.forEach(connection -> connection.shutDown(CloseConnectionReason.APP_SHUT_DOWN));
 
             try {
-                if (!serverSocket.isClosed())
+                if (!serverSocket.isClosed()) {
                     serverSocket.close();
+                }
             } catch (SocketException e) {
                 log.debug("SocketException at shutdown might be expected " + e.getMessage());
             } catch (IOException e) {
@@ -120,5 +124,9 @@ class Server implements Runnable {
         } else {
             log.warn("stopped already called ast shutdown");
         }
+    }
+
+    private boolean isServerActive() {
+        return !serverThread.isInterrupted();
     }
 }

@@ -50,7 +50,7 @@ public class PriceRequest {
         String baseUrl = provider.getBaseUrl();
         SettableFuture<Tuple2<Map<String, Long>, Map<String, MarketPrice>>> resultFuture = SettableFuture.create();
         ListenableFuture<Tuple2<Map<String, Long>, Map<String, MarketPrice>>> future = executorService.submit(() -> {
-            Thread.currentThread().setName("PriceRequest @ " + baseUrl);
+            Thread.currentThread().setName(Thread.currentThread().getName() + "@" + baseUrl);
             return provider.getAll();
         });
 
@@ -60,12 +60,12 @@ public class PriceRequest {
                 if (!shutDownRequested) {
                     resultFuture.set(marketPriceTuple);
                 }
-
             }
 
             public void onFailure(@NotNull Throwable throwable) {
-                if (!shutDownRequested) {
-                    resultFuture.setException(new PriceRequestException(throwable, baseUrl));
+                if (!shutDownRequested && !resultFuture.setException(new PriceRequestException(throwable, baseUrl))) {
+                    // In case the setException returns false we need to cancel the future.
+                    resultFuture.cancel(true);
                 }
             }
         }, MoreExecutors.directExecutor());
@@ -78,6 +78,6 @@ public class PriceRequest {
         if (provider != null) {
             provider.shutDown();
         }
-        Utilities.shutdownAndAwaitTermination(executorService, 1, TimeUnit.SECONDS);
+        Utilities.shutdownAndAwaitTermination(executorService, 2, TimeUnit.SECONDS);
     }
 }

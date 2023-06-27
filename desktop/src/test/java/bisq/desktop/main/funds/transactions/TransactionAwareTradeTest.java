@@ -30,10 +30,10 @@ import javafx.collections.FXCollections;
 
 import java.util.Set;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -46,7 +46,7 @@ public class TransactionAwareTradeTest {
     private Trade delegate;
     private TransactionAwareTradable trade;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         this.transaction = mock(Transaction.class);
         when(transaction.getTxId()).thenReturn(XID);
@@ -66,13 +66,13 @@ public class TransactionAwareTradeTest {
 
     @Test
     public void testIsRelatedToTransactionWhenPayoutTx() {
-        when(delegate.getPayoutTx().getTxId()).thenReturn(XID);
+        when(delegate.getPayoutTxId()).thenReturn(XID.toString());
         assertTrue(trade.isRelatedToTransaction(transaction));
     }
 
     @Test
     public void testIsRelatedToTransactionWhenDepositTx() {
-        when(delegate.getDepositTx().getTxId()).thenReturn(XID);
+        when(delegate.getDepositTxId()).thenReturn(XID.toString());
         assertTrue(trade.isRelatedToTransaction(transaction));
     }
 

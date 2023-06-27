@@ -19,10 +19,10 @@ package bisq.core.provider.mempool;
 
 import bisq.core.dao.governance.param.Param;
 import bisq.core.dao.state.DaoStateService;
+import bisq.core.dao.state.model.blockchain.Tx;
 import bisq.core.filter.FilterManager;
 
 import bisq.common.util.Tuple2;
-import bisq.common.util.Utilities;
 
 import org.bitcoinj.core.Coin;
 
@@ -33,8 +33,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,19 +48,17 @@ import static com.google.common.base.Preconditions.checkNotNull;
 @Slf4j
 @Getter
 public class TxValidator {
-    private static final Date USE_FEE_FROM_FILTER_ACTIVATION_DATE = Utilities.getUTCDate(2022, GregorianCalendar.JANUARY, 1);
-    private final static double FEE_TOLERANCE = 0.95;     // we expect fees to be at least 95% of target
+    private final static double FEE_TOLERANCE = 0.5;     // we expect fees to be at least 50% of target
     private final static long BLOCK_TOLERANCE = 599999;  // allow really old offers with weird fee addresses
 
     private final DaoStateService daoStateService;
     private final FilterManager filterManager;
-    private long blockHeightAtOfferCreation; // Only set for maker.
+    private long feePaymentBlockHeight; // applicable to maker and taker fees
     private final List<String> errorList;
     private final String txId;
     private Coin amount;
     @Nullable
-    private Boolean isFeeCurrencyBtc = null;
-    @Nullable
+    private Boolean isFeeCurrencyBtc;
     private Long chainHeight;
     @Setter
     private String jsonTxt;
@@ -70,28 +66,15 @@ public class TxValidator {
     public TxValidator(DaoStateService daoStateService,
                        String txId,
                        Coin amount,
-                       @Nullable Boolean isFeeCurrencyBtc,
+                       boolean isFeeCurrencyBtc,
+                       long feePaymentBlockHeight,
                        FilterManager filterManager) {
         this.daoStateService = daoStateService;
         this.txId = txId;
         this.amount = amount;
         this.isFeeCurrencyBtc = isFeeCurrencyBtc;
-        this.filterManager = filterManager;
-        this.errorList = new ArrayList<>();
-        this.jsonTxt = "";
-    }
-
-    public TxValidator(DaoStateService daoStateService,
-                       String txId,
-                       Coin amount,
-                       @Nullable Boolean isFeeCurrencyBtc,
-                       long blockHeightAtOfferCreation,
-                       FilterManager filterManager) {
-        this.daoStateService = daoStateService;
-        this.txId = txId;
-        this.amount = amount;
-        this.isFeeCurrencyBtc = isFeeCurrencyBtc;
-        this.blockHeightAtOfferCreation = blockHeightAtOfferCreation;
+        this.feePaymentBlockHeight = feePaymentBlockHeight;
+        this.chainHeight = (long) daoStateService.getChainHeight();
         this.filterManager = filterManager;
         this.errorList = new ArrayList<>();
         this.jsonTxt = "";
@@ -119,8 +102,6 @@ public class TxValidator {
                 if (checkNotNull(isFeeCurrencyBtc)) {
                     status = checkFeeAddressBTC(jsonTxt, btcFeeReceivers)
                             && checkFeeAmountBTC(jsonTxt, amount, true, getBlockHeightForFeeCalculation(jsonTxt));
-                } else {
-                    status = checkFeeAmountBSQ(jsonTxt, amount, true, getBlockHeightForFeeCalculation(jsonTxt));
                 }
             }
         } catch (JsonSyntaxException e) {
@@ -130,6 +111,26 @@ public class TxValidator {
             status = false;
         }
         return endResult("Maker tx validation", status);
+    }
+
+    public TxValidator validateBsqFeeTx(boolean isMaker) {
+        Optional<Tx> tx = daoStateService.getTx(txId);
+        String statusStr = (isMaker ? "Maker" : "Taker") + " tx validation";
+        if (tx.isEmpty()) {
+            long txAge = this.chainHeight - this.feePaymentBlockHeight;
+            if (txAge > 48) {
+                // still unconfirmed after 8 hours grace period we assume there may be SPV wallet issue.
+                // see github.com/bisq-network/bisq/issues/6603
+                statusStr = String.format("BSQ tx %s not found, age=%d: FAIL.", txId, txAge);
+                log.warn(statusStr);
+                return endResult(statusStr, false);
+            } else {
+                log.info("DAO does not yet have the tx {} (age={}), bypassing check of burnt BSQ amount.", txId, txAge);
+                return endResult(statusStr, true);
+            }
+        } else {
+            return endResult(statusStr, checkFeeAmountBSQ(tx.get(), amount, isMaker, feePaymentBlockHeight));
+        }
     }
 
     public TxValidator parseJsonValidateTakerFeeTx(String jsonTxt, List<String> btcFeeReceivers) {
@@ -143,8 +144,6 @@ public class TxValidator {
                 if (isFeeCurrencyBtc) {
                     status = checkFeeAddressBTC(jsonTxt, btcFeeReceivers)
                             && checkFeeAmountBTC(jsonTxt, amount, false, getBlockHeightForFeeCalculation(jsonTxt));
-                } else {
-                    status = checkFeeAmountBSQ(jsonTxt, amount, false, getBlockHeightForFeeCalculation(jsonTxt));
                 }
             }
         } catch (JsonSyntaxException e) {
@@ -250,28 +249,16 @@ public class TxValidator {
         return false;
     }
 
-    // I think its better to postpone BSQ fee check once the BSQ trade fee tx is confirmed and then use the BSQ explorer to request the
-    // BSQ fee to check if it is correct.
-    // Otherwise the requirements here become very complicated and potentially impossible to verify as we don't know
-    // if inputs and outputs are valid BSQ without the BSQ parser and confirmed transactions.
-    private boolean checkFeeAmountBSQ(String jsonTxt, Coin tradeAmount, boolean isMaker, long blockHeight) {
-        JsonArray jsonVin = getVinAndVout(jsonTxt).first;
-        JsonArray jsonVout = getVinAndVout(jsonTxt).second;
-        JsonObject jsonVin0 = jsonVin.get(0).getAsJsonObject();
-        JsonObject jsonVout0 = jsonVout.get(0).getAsJsonObject();
-        JsonElement jsonVIn0Value = jsonVin0.getAsJsonObject("prevout").get("value");
-        JsonElement jsonVOut0Value = jsonVout0.getAsJsonObject().get("value");
-        if (jsonVIn0Value == null || jsonVOut0Value == null) {
-            throw new JsonSyntaxException("vin/vout missing data");
-        }
+    private boolean checkFeeAmountBSQ(Tx bsqTx, Coin tradeAmount, boolean isMaker, long blockHeight) {
         Param minFeeParam = isMaker ? Param.MIN_MAKER_FEE_BSQ : Param.MIN_TAKER_FEE_BSQ;
         long expectedFeeAsLong = calculateFee(tradeAmount,
                 isMaker ? getMakerFeeRateBsq(blockHeight) : getTakerFeeRateBsq(blockHeight),
                 minFeeParam).getValue();
-        long feeValue = getBsqBurnt(jsonVin, jsonVOut0Value.getAsLong(), expectedFeeAsLong);
+
+        long feeValue = bsqTx.getBurntBsq();
         log.debug("BURNT BSQ maker fee: {} BSQ ({} sats)", (double) feeValue / 100.0, feeValue);
-        String description = String.format("Expected fee: %.2f BSQ, actual fee paid: %.2f BSQ",
-                (double) expectedFeeAsLong / 100.0, (double) feeValue / 100.0);
+        String description = String.format("Expected fee: %.2f BSQ, actual fee paid: %.2f BSQ, Trade amount: %s",
+                (double) expectedFeeAsLong / 100.0, (double) feeValue / 100.0, tradeAmount.toPlainString());
 
         if (expectedFeeAsLong == feeValue) {
             log.debug("The fee matched. " + description);
@@ -279,7 +266,7 @@ public class TxValidator {
         }
 
         if (expectedFeeAsLong < feeValue) {
-            log.info("The fee was more than what we expected. " + description);
+            log.info("The fee was more than what we expected. " + description + " Tx:" + bsqTx.getId());
             return true;
         }
 
@@ -350,39 +337,6 @@ public class TxValidator {
         // we don't care if it is confirmed or not, just that it exists.
     }
 
-    // a BSQ maker/taker fee transaction looks like this:
-    // BSQ INPUT 1          BSQ OUTPUT
-    // BSQ INPUT 2          BTC OUTPUT FOR RESERVED AMOUNT
-    // BSQ INPUT n          BTC OUTPUT FOR CHANGE
-    // BTC INPUT 1
-    // BTC INPUT 2
-    // BTC INPUT n
-    // there can be any number of BSQ inputs and BTC inputs
-    // BSQ inputs always come first in the tx, followed by BTC for the collateral.
-    // the sum of all BSQ inputs minus the BSQ output is the burnt amount, or trading fee.
-    long getBsqBurnt(JsonArray jsonVin, long bsqOutValue, long expectedFee) {
-        // sum consecutive inputs until we have accumulated enough to cover the output + burnt amount
-        long bsqInValue = 0;
-        for (int txIndex = 0; txIndex < jsonVin.size() - 1; txIndex++) {
-            bsqInValue += jsonVin.get(txIndex).getAsJsonObject().getAsJsonObject("prevout").get("value").getAsLong();
-            if (bsqInValue - expectedFee >= bsqOutValue) {
-                break;  // target reached - bsq input exceeds the output and expected burn amount
-            }
-        }
-        // guard against negative burn amount (i.e. only 1 tx input, or first in < first out)
-        long burntAmount = Math.max(0, bsqInValue - bsqOutValue);
-        // since we do not know which of the first 'n' are definitively BSQ inputs, sanity-check that the burnt amount
-        // is not too ridiculously high, as that would imply that we counted a BTC input.
-        if (burntAmount > 10 * expectedFee) {
-            log.error("The apparent BSQ fee burnt seems ridiculously high ({}) compared to expected ({})", burntAmount, expectedFee);
-            burntAmount = 0;  //  returning zero will flag the trade for manual review
-        }
-        if (burntAmount == 0) {
-            log.error("Could not obtain the burnt BSQ amount, trade will be flagged for manual review.");
-        }
-        return burntAmount;
-    }
-
     private static long getTxConfirms(String jsonTxt, long chainHeight) {
         long blockHeight = getTxBlockHeight(jsonTxt);
         if (blockHeight > 0) {
@@ -395,8 +349,8 @@ public class TxValidator {
     // if the tx is not yet confirmed, use current block tip, if tx is confirmed use the block it was confirmed at.
     private long getBlockHeightForFeeCalculation(String jsonTxt) {
         // For the maker we set the blockHeightAtOfferCreation from the offer
-        if (blockHeightAtOfferCreation > 0) {
-            return blockHeightAtOfferCreation;
+        if (feePaymentBlockHeight > 0) {
+            return feePaymentBlockHeight;
         }
 
         long txBlockHeight = getTxBlockHeight(jsonTxt);
@@ -462,9 +416,6 @@ public class TxValidator {
                                                              Param minFeeParam,
                                                              boolean isBtcFee,
                                                              String description) {
-        if (new Date().before(USE_FEE_FROM_FILTER_ACTIVATION_DATE)) {
-            return Optional.empty();
-        }
         return getFeeFromFilter(isMaker, isBtcFee)
                 .map(feeFromFilter -> {
                     boolean isValid = testWithFeeFromFilter(tradeAmount, feeValueAsCoin, feeFromFilter, minFeeParam);

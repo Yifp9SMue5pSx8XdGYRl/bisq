@@ -164,8 +164,8 @@ public class CoreApi {
         return coreOffersService.getBsqSwapOffers(direction);
     }
 
-    public List<Offer> getOffers(String direction, String currencyCode) {
-        return coreOffersService.getOffers(direction, currencyCode);
+    public List<Offer> getOffers(String direction, String currencyCode, boolean all) {
+        return coreOffersService.getOffers(direction, currencyCode, all);
     }
 
     public List<OpenOffer> getMyOffers(String direction, String currencyCode) {
@@ -428,6 +428,10 @@ public class CoreApi {
 
     public TxFeeRateInfo getMostRecentTxFeeRateInfo() {
         return walletsService.getMostRecentTxFeeRateInfo();
+    }
+
+    public Set<Transaction> getTransactions() {
+        return walletsService.getTransactions();
     }
 
     public Transaction getTransaction(String txId) {

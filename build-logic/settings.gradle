@@ -1,0 +1,11 @@
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs {
+            from(files("../gradle/libs.versions.toml"))
+        }
+    }
+}
+
+include 'commons'
+include 'gradle-tasks'
+include 'tor-binary'

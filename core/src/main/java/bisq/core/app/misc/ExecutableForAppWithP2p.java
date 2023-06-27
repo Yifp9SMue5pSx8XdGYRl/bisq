@@ -39,9 +39,8 @@ import bisq.common.file.JsonFileManager;
 import bisq.common.handlers.ResultHandler;
 import bisq.common.persistence.PersistenceManager;
 import bisq.common.setup.GracefulShutDownHandler;
+import bisq.common.util.SingleThreadExecutorUtils;
 import bisq.common.util.Profiler;
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -50,8 +49,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
@@ -71,11 +69,8 @@ public abstract class ExecutableForAppWithP2p extends BisqExecutable {
 
     @Override
     protected void configUserThread() {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder()
-                .setNameFormat(this.getClass().getSimpleName())
-                .setDaemon(true)
-                .build();
-        UserThread.setExecutor(Executors.newSingleThreadExecutor(threadFactory));
+        ExecutorService executorService = SingleThreadExecutorUtils.getSingleThreadExecutor(this.getClass());
+        UserThread.setExecutor(executorService);
     }
 
     @Override
@@ -149,13 +144,7 @@ public abstract class ExecutableForAppWithP2p extends BisqExecutable {
         seedNodeAddresses.sort(Comparator.comparing(NodeAddress::getFullAddress));
 
         NodeAddress myAddress = injector.getInstance(P2PService.class).getNetworkNode().getNodeAddress();
-        int myIndex = -1;
-        for (int i = 0; i < seedNodeAddresses.size(); i++) {
-            if (seedNodeAddresses.get(i).equals(myAddress)) {
-                myIndex = i;
-                break;
-            }
-        }
+        int myIndex = seedNodeAddresses.indexOf(myAddress);
 
         if (myIndex == -1) {
             log.warn("We did not find our node address in the seed nodes repository. " +
@@ -184,11 +173,13 @@ public abstract class ExecutableForAppWithP2p extends BisqExecutable {
         // triggered multiple times after a restart while being in the same hour. It can be that we miss our target
         // hour during that delay but that is not considered problematic, the seed would just restart a bit longer than
         // 24 hours.
-        int target = myIndex;
         UserThread.runAfter(() -> {
             // We check every hour if we are in the target hour.
             UserThread.runPeriodically(() -> {
                 int currentHour = ZonedDateTime.ofInstant(Instant.now(), ZoneId.of("UTC")).getHour();
+
+                // distribute evenly between 0-23
+                long target = Math.round(24d / seedNodeAddresses.size() * myIndex) % 24;
                 if (currentHour == target) {
                     log.warn("\n\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n" +
                                     "Shut down node at hour {} (UTC time is {})" +

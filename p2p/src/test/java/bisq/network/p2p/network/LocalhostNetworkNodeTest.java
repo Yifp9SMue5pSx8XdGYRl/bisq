@@ -26,22 +26,22 @@ import java.util.concurrent.CountDownLatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 // TorNode created. Took 6 sec.
 // Hidden service created. Took 40-50 sec.
 // Connection establishment takes about 4 sec.
 
 //TODO P2P network tests are outdated
-@Ignore
+@Disabled
 public class LocalhostNetworkNodeTest {
     private static final Logger log = LoggerFactory.getLogger(LocalhostNetworkNodeTest.class);
 
     @Test
     public void testMessage() throws InterruptedException, IOException {
         CountDownLatch msgLatch = new CountDownLatch(2);
-        LocalhostNetworkNode node1 = new LocalhostNetworkNode(9001, TestUtils.getNetworkProtoResolver(), null);
+        LocalhostNetworkNode node1 = new LocalhostNetworkNode(9001, TestUtils.getNetworkProtoResolver(), null, 12);
         node1.addMessageListener((message, connection) -> {
             log.debug("onMessage node1 " + message);
             msgLatch.countDown();
@@ -69,7 +69,7 @@ public class LocalhostNetworkNodeTest {
             }
         });
 
-        LocalhostNetworkNode node2 = new LocalhostNetworkNode(9002, TestUtils.getNetworkProtoResolver(), null);
+        LocalhostNetworkNode node2 = new LocalhostNetworkNode(9002, TestUtils.getNetworkProtoResolver(), null, 12);
         node2.addMessageListener((message, connection) -> {
             log.debug("onMessage node2 " + message);
             msgLatch.countDown();

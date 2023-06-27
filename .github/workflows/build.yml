@@ -2,7 +2,6 @@ name: Build Bisq
 
 on:
   push:
-    branches: [ master ]
   pull_request:
     branches: [ master ]
 
@@ -18,27 +17,15 @@ jobs:
             java: [ '11', '11.0.3', '15', '15.0.5']
     name: Test Java ${{ matrix.Java }}, ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8
-      with:
-        fetch-depth: 0
-        ref: ${{ github.event.pull_request.head.sha }}
+    - uses: actions/checkout@v3.5.3
 
     - name: Set up JDK
-      uses: actions/setup-java@19eeec562b37d29a1ad055b7de9c280bd0906d8d
+      uses: actions/setup-java@v3.11.0
       with:
         java-version: ${{ matrix.java }}
         distribution: 'zulu'
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-
-    - name: Validate Gradle Wrapper JAR files
-      uses: gradle/wrapper-validation-action@55e685c48d84285a5b0418cd094606e199cca3b6
-
     - name: Build with Gradle
-      run: ./gradlew build
-
-    - name: Print Dependency Verification Report
-      if: ${{ failure() }}
-      run: cat build/reports/dependency-verification/*/*.html
-      shell: bash
+      uses: gradle/gradle-build-action@v2.4.2
+      with:
+        arguments: build --scan

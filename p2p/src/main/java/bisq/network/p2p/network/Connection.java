@@ -40,13 +40,13 @@ import bisq.common.config.Config;
 import bisq.common.proto.ProtobufferException;
 import bisq.common.proto.network.NetworkEnvelope;
 import bisq.common.proto.network.NetworkProtoResolver;
+import bisq.common.util.SingleThreadExecutorUtils;
 import bisq.common.util.Utilities;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 
 import javax.inject.Inject;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.Uninterruptibles;
 
 import javafx.beans.property.ObjectProperty;
@@ -74,7 +74,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -108,7 +107,8 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
     private static final int PERMITTED_MESSAGE_SIZE = 200 * 1024;                       // 200 kb
     private static final int MAX_PERMITTED_MESSAGE_SIZE = 10 * 1024 * 1024;             // 10 MB (425 offers resulted in about 660 kb, mailbox msg will add more to it) offer has usually 2 kb, mailbox 3kb.
     //TODO decrease limits again after testing
-    private static final int SOCKET_TIMEOUT = (int) TimeUnit.SECONDS.toMillis(180);
+    private static final int SOCKET_TIMEOUT = (int) TimeUnit.SECONDS.toMillis(240);
+    private static final int SHUTDOWN_TIMEOUT = 100;
 
     public static int getPermittedMessageSize() {
         return PERMITTED_MESSAGE_SIZE;
@@ -116,6 +116,10 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
 
     public static int getMaxPermittedMessageSize() {
         return MAX_PERMITTED_MESSAGE_SIZE;
+    }
+
+    public static int getShutdownTimeout() {
+        return SHUTDOWN_TIMEOUT;
     }
 
 
@@ -126,10 +130,10 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
     private final Socket socket;
     private final ConnectionListener connectionListener;
     @Nullable
-    private final NetworkFilter networkFilter;
+    private final BanFilter banFilter;
     @Getter
     private final String uid;
-    private final ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "Connection.java executor-service"));
+    private final ExecutorService executorService;
     @Getter
     private final Statistic statistic;
     @Getter
@@ -138,7 +142,7 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
     private final ConnectionStatistics connectionStatistics;
 
     // set in init
-    private SynchronizedProtoOutputStream protoOutputStream;
+    private ProtoOutputStream protoOutputStream;
 
     // mutable data, set from other threads but not changed internally.
     @Getter
@@ -171,11 +175,14 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
                ConnectionListener connectionListener,
                @Nullable NodeAddress peersNodeAddress,
                NetworkProtoResolver networkProtoResolver,
-               @Nullable NetworkFilter networkFilter) {
+               @Nullable BanFilter banFilter) {
         this.socket = socket;
         this.connectionListener = connectionListener;
-        this.networkFilter = networkFilter;
-        uid = UUID.randomUUID().toString();
+        this.banFilter = banFilter;
+
+        this.uid = UUID.randomUUID().toString();
+        this.executorService = SingleThreadExecutorUtils.getSingleThreadExecutor("Executor service for connection with uid " + uid);
+
         statistic = new Statistic();
 
         addMessageListener(messageListener);
@@ -194,14 +201,15 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
             // When you construct an ObjectInputStream, in the constructor the class attempts to read a header that
             // the associated ObjectOutputStream on the other end of the connection has written.
             // It will not return until that header has been read.
-            protoOutputStream = new SynchronizedProtoOutputStream(socket.getOutputStream(), statistic);
+            protoOutputStream = new ProtoOutputStream(socket.getOutputStream(), statistic);
             protoInputStream = socket.getInputStream();
             // We create a thread for handling inputStream data
-            singleThreadExecutor.submit(this);
+            executorService.submit(this);
 
             if (peersNodeAddress != null) {
                 setPeersNodeAddress(peersNodeAddress);
-                if (networkFilter != null && networkFilter.isPeerBanned(peersNodeAddress)) {
+                if (banFilter != null && banFilter.isPeerBanned(peersNodeAddress)) {
+                    log.warn("We created an outbound connection with a banned peer");
                     reportInvalidRequest(RuleViolation.PEER_BANNED);
                 }
             }
@@ -220,8 +228,7 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
         return capabilities;
     }
 
-    // Called from various threads
-    public void sendMessage(NetworkEnvelope networkEnvelope) {
+    void sendMessage(NetworkEnvelope networkEnvelope) {
         long ts = System.currentTimeMillis();
         log.debug(">> Send networkEnvelope of type: {}", networkEnvelope.getClass().getSimpleName());
 
@@ -230,9 +237,10 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
             return;
         }
 
-        if (networkFilter != null &&
+        if (banFilter != null &&
                 peersNodeAddressOptional.isPresent() &&
-                networkFilter.isPeerBanned(peersNodeAddressOptional.get())) {
+                banFilter.isPeerBanned(peersNodeAddressOptional.get())) {
+            log.warn("We tried to send a message to a banned peer. message={}", networkEnvelope.getClass().getSimpleName());
             reportInvalidRequest(RuleViolation.PEER_BANNED);
             return;
         }
@@ -264,6 +272,7 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
             }
         } catch (Throwable t) {
             handleException(t);
+            throw new RuntimeException(t);
         }
     }
 
@@ -398,9 +407,12 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
         List<NetworkEnvelope> networkEnvelopes = bundleOfEnvelopes.getEnvelopes();
         for (NetworkEnvelope networkEnvelope : networkEnvelopes) {
             // If SendersNodeAddressMessage we do some verifications and apply if successful, otherwise we return false.
-            if (networkEnvelope instanceof SendersNodeAddressMessage &&
-                    !processSendersNodeAddressMessage((SendersNodeAddressMessage) networkEnvelope)) {
-                continue;
+            if (networkEnvelope instanceof SendersNodeAddressMessage) {
+                boolean isValid = processSendersNodeAddressMessage((SendersNodeAddressMessage) networkEnvelope);
+                if (!isValid) {
+                    log.warn("Received an invalid {} at processing BundleOfEnvelopes", networkEnvelope.getClass().getSimpleName());
+                    continue;
+                }
             }
 
             if (networkEnvelope instanceof AddPersistableNetworkPayloadMessage) {
@@ -510,6 +522,7 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
         // Use UserThread.execute as it's not clear if that is called from a non-UserThread
         UserThread.execute(() -> connectionListener.onDisconnect(closeConnectionReason, this));
         try {
+            protoOutputStream.onConnectionShutdown();
             socket.close();
         } catch (SocketException e) {
             log.trace("SocketException at shutdown might be expected {}", e.getMessage());
@@ -517,8 +530,6 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
             log.error("Exception at shutdown. " + e.getMessage());
             e.printStackTrace();
         } finally {
-            protoOutputStream.onConnectionShutdown();
-
             capabilitiesListeners.clear();
 
             try {
@@ -528,8 +539,7 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
                 e.printStackTrace();
             }
 
-            //noinspection UnstableApiUsage
-            MoreExecutors.shutdownAndAwaitTermination(singleThreadExecutor, 100, TimeUnit.MILLISECONDS);
+            Utilities.shutdownAndAwaitTermination(executorService, SHUTDOWN_TIMEOUT, TimeUnit.MILLISECONDS);
 
             log.debug("Connection shutdown complete {}", this);
             // Use UserThread.execute as it's not clear if that is called from a non-UserThread
@@ -595,7 +605,7 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
 
 
     public boolean reportInvalidRequest(RuleViolation ruleViolation) {
-        log.warn("We got reported the ruleViolation {} at connection {}", ruleViolation, this);
+        log.info("We got reported the ruleViolation {} at connection with address{} and uid {}", ruleViolation, this.getPeersNodeAddressProperty(), this.getUid());
         int numRuleViolations;
         numRuleViolations = ruleViolations.getOrDefault(ruleViolation, 0);
 
@@ -603,14 +613,12 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
         ruleViolations.put(ruleViolation, numRuleViolations);
 
         if (numRuleViolations >= ruleViolation.maxTolerance) {
-            log.warn("We close connection as we received too many corrupt requests.\n" +
-                    "numRuleViolations={}\n\t" +
-                    "corruptRequest={}\n\t" +
-                    "corruptRequests={}\n\t" +
-                    "connection={}", numRuleViolations, ruleViolation, ruleViolations, this);
+            log.warn("We close connection as we received too many corrupt requests. " +
+                    "ruleViolations={} " +
+                    "connection with address{} and uid {}", ruleViolations, peersNodeAddressProperty, uid);
             this.ruleViolation = ruleViolation;
             if (ruleViolation == RuleViolation.PEER_BANNED) {
-                log.warn("We close connection due RuleViolation.PEER_BANNED. peersNodeAddress={}", getPeersNodeAddressOptional());
+                log.debug("We close connection due RuleViolation.PEER_BANNED. peersNodeAddress={}", getPeersNodeAddressOptional());
                 shutDown(CloseConnectionReason.PEER_BANNED);
             } else if (ruleViolation == RuleViolation.INVALID_CLASS) {
                 log.warn("We close connection due RuleViolation.INVALID_CLASS");
@@ -658,7 +666,6 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
                     socket.toString(),
                     this.peersNodeAddressOptional,
                     e.toString());
-            e.printStackTrace();
         }
         shutDown(closeConnectionReason);
     }
@@ -678,7 +685,8 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
             setPeersNodeAddress(senderNodeAddress);
         }
 
-        if (networkFilter != null && networkFilter.isPeerBanned(senderNodeAddress)) {
+        if (banFilter != null && banFilter.isPeerBanned(senderNodeAddress)) {
+            log.warn("We got a message from a banned peer. message={}", sendersNodeAddressMessage.getClass().getSimpleName());
             reportInvalidRequest(RuleViolation.PEER_BANNED);
             return false;
         }
@@ -702,10 +710,10 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
     @Override
     public void run() {
         try {
-            Thread.currentThread().setName("InputHandler");
+            Thread.currentThread().setName("InputHandler-" + Utilities.toTruncatedString(uid, 15));
             while (!stopped && !Thread.currentThread().isInterrupted()) {
                 if (!threadNameSet && getPeersNodeAddressOptional().isPresent()) {
-                    Thread.currentThread().setName("InputHandler-" + getPeersNodeAddressOptional().get().getFullAddress());
+                    Thread.currentThread().setName("InputHandler-" + Utilities.toTruncatedString(getPeersNodeAddressOptional().get().getFullAddress(), 15));
                     threadNameSet = true;
                 }
                 try {
@@ -741,9 +749,11 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
                         return;
                     }
 
-                    if (networkFilter != null &&
+                    if (banFilter != null &&
                             peersNodeAddressOptional.isPresent() &&
-                            networkFilter.isPeerBanned(peersNodeAddressOptional.get())) {
+                            banFilter.isPeerBanned(peersNodeAddressOptional.get())) {
+
+                        log.warn("We got a message from a banned peer. proto={}", Utilities.toTruncatedString(proto));
                         reportInvalidRequest(RuleViolation.PEER_BANNED);
                         return;
                     }
@@ -829,9 +839,15 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
 
                         // If SendersNodeAddressMessage we do some verifications and apply if successful,
                         // otherwise we return false.
-                        if (networkEnvelope instanceof SendersNodeAddressMessage &&
-                                !processSendersNodeAddressMessage((SendersNodeAddressMessage) networkEnvelope)) {
-                            return;
+                        if (networkEnvelope instanceof SendersNodeAddressMessage) {
+                            boolean isValid = processSendersNodeAddressMessage((SendersNodeAddressMessage) networkEnvelope);
+                            if (!isValid) {
+                                return;
+                            }
+                        }
+
+                        if (!(networkEnvelope instanceof SendersNodeAddressMessage) && peersNodeAddressOptional.isEmpty()) {
+                            log.info("We got a {} from a peer with yet unknown address on connection with uid={}", networkEnvelope.getClass().getSimpleName(), uid);
                         }
 
                         onMessage(networkEnvelope, this);
@@ -843,7 +859,6 @@ public class Connection implements HasCapabilities, Runnable, MessageListener {
                     reportInvalidRequest(RuleViolation.INVALID_CLASS);
                 } catch (ProtobufferException | NoClassDefFoundError | InvalidProtocolBufferException e) {
                     log.error(e.getMessage());
-                    e.printStackTrace();
                     reportInvalidRequest(RuleViolation.INVALID_DATA_TYPE);
                 } catch (Throwable t) {
                     handleException(t);

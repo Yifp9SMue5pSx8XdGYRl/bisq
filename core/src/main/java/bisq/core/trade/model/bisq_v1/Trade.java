@@ -897,6 +897,10 @@ public abstract class Trade extends TradeModel {
         return new Date(getTradeStartTime() + getMaxTradePeriod());
     }
 
+    public long getTradeAge() {
+        return System.currentTimeMillis() - getTradeStartTime();
+    }
+
     private long getMaxTradePeriod() {
         return offer.getPaymentMethod().getMaxTradePeriod();
     }
@@ -1065,6 +1069,12 @@ public abstract class Trade extends TradeModel {
 
     public boolean isBsqSwap() {
         return offer != null && offer.isBsqSwapOffer();
+    }
+
+    // By checking if burningManSelectionHeight is 0 we can detect if the trade was created with
+    // the new burningmen receivers or with legacy BM.
+    public boolean isUsingLegacyBurningMan() {
+        return processModel.getBurningManSelectionHeight() == 0;
     }
 
 

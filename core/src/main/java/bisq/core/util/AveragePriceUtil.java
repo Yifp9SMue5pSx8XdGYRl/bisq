@@ -24,16 +24,21 @@ import bisq.core.trade.statistics.TradeStatisticsManager;
 import bisq.core.user.Preferences;
 
 import bisq.common.util.MathUtils;
+import bisq.common.util.RangeUtils;
 import bisq.common.util.Tuple2;
 
 import org.bitcoinj.utils.Fiat;
 
+import com.google.common.collect.Range;
+import com.google.common.primitives.Doubles;
+
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class AveragePriceUtil {
@@ -42,23 +47,37 @@ public class AveragePriceUtil {
     public static Tuple2<Price, Price> getAveragePriceTuple(Preferences preferences,
                                                             TradeStatisticsManager tradeStatisticsManager,
                                                             int days) {
-        double percentToTrim = Math.max(0, Math.min(49, preferences.getBsqAverageTrimThreshold() * 100));
-        Date pastXDays = getPastDate(days);
-        List<TradeStatistics3> bsqAllTradePastXDays = tradeStatisticsManager.getObservableTradeStatisticsSet().stream()
-                .filter(e -> e.getCurrency().equals("BSQ"))
-                .filter(e -> e.getDate().after(pastXDays))
-                .collect(Collectors.toList());
-        List<TradeStatistics3> bsqTradePastXDays = percentToTrim > 0 ?
-                removeOutliers(bsqAllTradePastXDays, percentToTrim) :
-                bsqAllTradePastXDays;
+        return getAveragePriceTuple(preferences, tradeStatisticsManager, days, new Date());
+    }
 
-        List<TradeStatistics3> usdAllTradePastXDays = tradeStatisticsManager.getObservableTradeStatisticsSet().stream()
-                .filter(e -> e.getCurrency().equals("USD"))
-                .filter(e -> e.getDate().after(pastXDays))
-                .collect(Collectors.toList());
+    public static Tuple2<Price, Price> getAveragePriceTuple(Preferences preferences,
+                                                            TradeStatisticsManager tradeStatisticsManager,
+                                                            int days,
+                                                            Date date) {
+        Date pastXDays = getPastDate(days, date);
+        return getAveragePriceTuple(preferences, tradeStatisticsManager, pastXDays, date);
+    }
+
+    public static Tuple2<Price, Price> getAveragePriceTuple(Preferences preferences,
+                                                            TradeStatisticsManager tradeStatisticsManager,
+                                                            Date pastXDays,
+                                                            Date date) {
+        double percentToTrim = Math.max(0, Math.min(49, preferences.getBsqAverageTrimThreshold() * 100));
+        Set<TradeStatistics3> allTradePastXDays = RangeUtils.subSet(tradeStatisticsManager.getNavigableTradeStatisticsSet())
+                .withKey(TradeStatistics3::getDate)
+                .overRange(Range.open(pastXDays, date));
+
+        Map<Boolean, List<TradeStatistics3>> bsqUsdAllTradePastXDays = allTradePastXDays.stream()
+                .filter(e -> e.getCurrency().equals("USD") || e.getCurrency().equals("BSQ"))
+                .collect(Collectors.partitioningBy(e -> e.getCurrency().equals("USD")));
+
+        List<TradeStatistics3> bsqTradePastXDays = percentToTrim > 0 ?
+                removeOutliers(bsqUsdAllTradePastXDays.get(false), percentToTrim) :
+                bsqUsdAllTradePastXDays.get(false);
+
         List<TradeStatistics3> usdTradePastXDays = percentToTrim > 0 ?
-                removeOutliers(usdAllTradePastXDays, percentToTrim) :
-                usdAllTradePastXDays;
+                removeOutliers(bsqUsdAllTradePastXDays.get(true), percentToTrim) :
+                bsqUsdAllTradePastXDays.get(true);
 
         Price usdPrice = Price.valueOf("USD", getUSDAverage(bsqTradePastXDays, usdTradePastXDays));
         Price bsqPrice = Price.valueOf("BSQ", getBTCAverage(bsqTradePastXDays));
@@ -66,17 +85,17 @@ public class AveragePriceUtil {
     }
 
     private static List<TradeStatistics3> removeOutliers(List<TradeStatistics3> list, double percentToTrim) {
-        List<Double> yValues = list.stream()
+        List<Double> yValues = Doubles.asList(list.stream()
                 .filter(TradeStatistics3::isValid)
-                .map(e -> (double) e.getPrice())
-                .collect(Collectors.toList());
+                .mapToDouble(TradeStatistics3::getPrice)
+                .toArray());
 
         Tuple2<Double, Double> tuple = InlierUtil.findInlierRange(yValues, percentToTrim, HOW_MANY_STD_DEVS_CONSTITUTE_OUTLIER);
         double lowerBound = tuple.first;
         double upperBound = tuple.second;
         return list.stream()
-                .filter(e -> e.getPrice() > lowerBound)
-                .filter(e -> e.getPrice() < upperBound)
+                .filter(e -> (double) e.getPrice() >= lowerBound)
+                .filter(e -> (double) e.getPrice() <= upperBound)
                 .collect(Collectors.toList());
     }
 
@@ -95,21 +114,23 @@ public class AveragePriceUtil {
         return averagePrice;
     }
 
-    private static long getUSDAverage(List<TradeStatistics3> bsqList, List<TradeStatistics3> usdList) {
+    private static long getUSDAverage(List<TradeStatistics3> sortedBsqList, List<TradeStatistics3> sortedUsdList) {
         // Use next USD/BTC print as price to calculate BSQ/USD rate
         // Store each trade as amount of USD and amount of BSQ traded
-        List<Tuple2<Double, Double>> usdBsqList = new ArrayList<>(bsqList.size());
-        usdList.sort(Comparator.comparing(TradeStatistics3::getDateAsLong));
+        List<Tuple2<Double, Double>> usdBsqList = new ArrayList<>(sortedBsqList.size());
         var usdBTCPrice = 10000d; // Default to 10000 USD per BTC if there is no USD feed at all
 
-        for (TradeStatistics3 item : bsqList) {
-            // Find usdprice for trade item
-            usdBTCPrice = usdList.stream()
-                    .filter(usd -> usd.getDateAsLong() > item.getDateAsLong())
-                    .map(usd -> MathUtils.scaleDownByPowerOf10((double) usd.getTradePrice().getValue(),
-                            Fiat.SMALLEST_UNIT_EXPONENT))
-                    .findFirst()
-                    .orElse(usdBTCPrice);
+        int i = 0;
+        for (TradeStatistics3 item : sortedBsqList) {
+            // Find usd price for trade item
+            for (; i < sortedUsdList.size(); i++) {
+                TradeStatistics3 usd = sortedUsdList.get(i);
+                if (usd.getDateAsLong() > item.getDateAsLong()) {
+                    usdBTCPrice = MathUtils.scaleDownByPowerOf10((double) usd.getTradePrice().getValue(),
+                            Fiat.SMALLEST_UNIT_EXPONENT);
+                    break;
+                }
+            }
             var bsqAmount = MathUtils.scaleDownByPowerOf10((double) item.getTradeVolume().getValue(),
                     Altcoin.SMALLEST_UNIT_EXPONENT);
             var btcAmount = MathUtils.scaleDownByPowerOf10((double) item.getTradeAmount().getValue(),
@@ -130,9 +151,9 @@ public class AveragePriceUtil {
         return averagePrice;
     }
 
-    private static Date getPastDate(int days) {
+    private static Date getPastDate(int days, Date date) {
         Calendar cal = new GregorianCalendar();
-        cal.setTime(new Date());
+        cal.setTime(date);
         cal.add(Calendar.DAY_OF_MONTH, -1 * days);
         return cal.getTime();
     }

@@ -50,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SeedNodeMain extends ExecutableForAppWithP2p {
     private static final long CHECK_CONNECTION_LOSS_SEC = 30;
-    private static final String VERSION = "1.9.6";
+    private static final String VERSION = "1.9.10";
     private SeedNode seedNode;
     private Timer checkConnectionLossTime;
 
@@ -92,6 +92,19 @@ public class SeedNodeMain extends ExecutableForAppWithP2p {
     @Override
     protected void onApplicationLaunched() {
         super.onApplicationLaunched();
+    }
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // UncaughtExceptionHandler implementation
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    @Override
+    public void handleUncaughtException(Throwable throwable, boolean doShutDown) {
+        if (throwable instanceof OutOfMemoryError || doShutDown) {
+            log.error("We got an OutOfMemoryError and shut down");
+            gracefulShutDown(() -> log.info("gracefulShutDown complete"));
+        }
     }
 
 

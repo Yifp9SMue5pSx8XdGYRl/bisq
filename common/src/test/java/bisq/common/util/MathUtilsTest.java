@@ -17,26 +17,27 @@
 
 package bisq.common.util;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MathUtilsTest {
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRoundDoubleWithInfiniteArg() {
-        MathUtils.roundDouble(Double.POSITIVE_INFINITY, 2);
+        assertThrows(IllegalArgumentException.class, () -> MathUtils.roundDouble(Double.POSITIVE_INFINITY, 2));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRoundDoubleWithNaNArg() {
-        MathUtils.roundDouble(Double.NaN, 2);
+        assertThrows(IllegalArgumentException.class, () -> MathUtils.roundDouble(Double.NaN, 2));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testRoundDoubleWithNegativePrecision() {
-        MathUtils.roundDouble(3, -1);
+        assertThrows(IllegalArgumentException.class, () -> MathUtils.roundDouble(3, -1));
     }
 
     @SuppressWarnings("OptionalGetWithoutIsPresent")
@@ -46,12 +47,12 @@ public class MathUtilsTest {
         // Moving average = 4, 4.5, 4, 3, 2, 7/3
         var movingAverage = new MathUtils.MovingAverage(3, 0);
         int i = 0;
-        assertEquals(4, movingAverage.next(values[i++]).get(),0.001);
-        assertEquals(4.5, movingAverage.next(values[i++]).get(),0.001);
-        assertEquals(4, movingAverage.next(values[i++]).get(),0.001);
-        assertEquals(3, movingAverage.next(values[i++]).get(),0.001);
-        assertEquals(2, movingAverage.next(values[i++]).get(),0.001);
-        assertEquals((double) 7 / 3, movingAverage.next(values[i]).get(),0.001);
+        assertEquals(4, movingAverage.next(values[i++]).get(), 0.001);
+        assertEquals(4.5, movingAverage.next(values[i++]).get(), 0.001);
+        assertEquals(4, movingAverage.next(values[i++]).get(), 0.001);
+        assertEquals(3, movingAverage.next(values[i++]).get(), 0.001);
+        assertEquals(2, movingAverage.next(values[i++]).get(), 0.001);
+        assertEquals((double) 7 / 3, movingAverage.next(values[i]).get(), 0.001);
     }
 
     @SuppressWarnings("OptionalGetWithoutIsPresent")
@@ -63,9 +64,9 @@ public class MathUtilsTest {
         int i = 0;
         assertFalse(movingAverage.next(values[i++]).isPresent());
         assertFalse(movingAverage.next(values[i++]).isPresent());
-        assertEquals(99, movingAverage.next(values[i++]).get(),0.001);
-        assertEquals(99.333, movingAverage.next(values[i++]).get(),0.001);
+        assertEquals(99, movingAverage.next(values[i++]).get(), 0.001);
+        assertEquals(99.333, movingAverage.next(values[i++]).get(), 0.001);
         assertFalse(movingAverage.next(values[i++]).isPresent());
-        assertEquals(103.666, movingAverage.next(values[i]).get(),0.001);
+        assertEquals(103.666, movingAverage.next(values[i]).get(), 0.001);
     }
 }

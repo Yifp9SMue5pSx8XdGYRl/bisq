@@ -58,17 +58,17 @@ public class BtcNodes {
                         new BtcNode("btc2.vante.me", "bsqbtcparrfihlwolt4xgjbf4cgqckvrvsfyvy6vhiqrnh4w6ghixoid.onion", "94.23.205.110", BtcNode.DEFAULT_PORT, "@miker"),
 
                         // sqrrm
-                        new BtcNode("btc1.sqrrm.net", "jygcc54etaubgdpcvzgbihjaqbc37cstpvum5sjzvka4bibkp4wrgnqd.onion", "185.25.48.184", BtcNode.DEFAULT_PORT, "@sqrrm"),
-                        new BtcNode("btc2.sqrrm.net", "h32haomoe52ljz6qopedsocvotvoj5lm2zmecfhdhawb3flbsf64l2qd.onion", "81.171.22.143", BtcNode.DEFAULT_PORT, "@sqrrm"),
+                        new BtcNode("btc1.sqrrm.net", "cwi3ekrwhig47dhhzfenr5hbvckj7fzaojygvazi2lucsenwbzwoyiqd.onion", "185.25.48.184", BtcNode.DEFAULT_PORT, "@sqrrm"),
+                        new BtcNode("btc2.sqrrm.net", "upvthy74hgvgbqi6w3zd2mlchoi5tvvw7b5hpmmhcddd5fnnwrixneid.onion", "81.171.22.143", BtcNode.DEFAULT_PORT, "@sqrrm"),
 
                         // Devin Bileck
                         new BtcNode("btc1.bisq.services", "devinbtctu7uctl7hly2juu3thbgeivfnvw3ckj3phy6nyvpnx66yeyd.onion", "172.105.21.216", BtcNode.DEFAULT_PORT, "@devinbileck"),
-                        new BtcNode("btc2.bisq.services", "devinbtcyk643iruzfpaxw3on2jket7rbjmwygm42dmdyub3ietrbmid.onion", "173.255.240.205", BtcNode.DEFAULT_PORT, "@devinbileck"),
+                        new BtcNode(null, "devinbtcyk643iruzfpaxw3on2jket7rbjmwygm42dmdyub3ietrbmid.onion", null, BtcNode.DEFAULT_PORT, "@devinbileck"),
                         new BtcNode(null, "devinbtcmwkuitvxl3tfi5of4zau46ymeannkjv6fpnylkgf3q5fa3id.onion", null, BtcNode.DEFAULT_PORT, "@devinbileck"),
 
                         // wiz
-                        new BtcNode("node130.hnl.wiz.biz", "wizbit5555bsslwv4ctronnsgk5vh2w2pdx7v7eyuivlyuoteejk7lid.onion", "103.99.168.130", BtcNode.DEFAULT_PORT, "@wiz"),
-                        new BtcNode("node140.hnl.wiz.biz", "jto2jfbsxhb6yvhcrrjddrgbakte6tgsy3c3z3prss64gndgvovvosyd.onion", "103.99.168.140", BtcNode.DEFAULT_PORT, "@wiz"),
+                        new BtcNode("node110.tk7.wiz.biz", "wizbit5555bsslwv4ctronnsgk5vh2w2pdx7v7eyuivlyuoteejk7lid.onion", "103.99.169.110", BtcNode.DEFAULT_PORT, "@wiz"),
+                        new BtcNode("node120.tk7.wiz.biz", "jto2jfbsxhb6yvhcrrjddrgbakte6tgsy3c3z3prss64gndgvovvosyd.onion", "103.99.169.120", BtcNode.DEFAULT_PORT, "@wiz"),
                         new BtcNode("node210.fmt.wiz.biz", "rfqmn3qe36uaptkxhdvi74p4hyrzhir6vhmzb2hqryxodig4gue2zbyd.onion", "103.99.170.210", BtcNode.DEFAULT_PORT, "@wiz"),
                         new BtcNode("node220.fmt.wiz.biz", "azbpsh4arqlm6442wfimy7qr65bmha2zhgjg7wbaji6vvaug53hur2qd.onion", "103.99.170.220", BtcNode.DEFAULT_PORT, "@wiz")
                 ) :

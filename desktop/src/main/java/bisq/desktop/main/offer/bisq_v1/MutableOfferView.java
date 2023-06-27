@@ -258,8 +258,7 @@ public abstract class MutableOfferView<M extends MutableOfferViewModel<?>> exten
 
             currencyComboBox.getSelectionModel().select(model.getTradeCurrency());
             paymentAccountsComboBox.setItems(getPaymentAccounts());
-            paymentAccountsComboBox.getSelectionModel().select(model.getPaymentAccount());
-
+            UserThread.execute(() -> paymentAccountsComboBox.getSelectionModel().select(model.getPaymentAccount()));
             onPaymentAccountsComboBoxSelected();
 
             balanceTextField.setTargetAmount(model.getDataModel().totalToPayAsCoinProperty().get());
@@ -296,7 +295,7 @@ public abstract class MutableOfferView<M extends MutableOfferViewModel<?>> exten
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     public void onTabSelected(boolean isSelected) {
-        if (isSelected && !model.getDataModel().isTabSelected) {
+        if (isSelected) {
             doActivate();
         } else {
             deactivate();
@@ -804,7 +803,7 @@ public abstract class MutableOfferView<M extends MutableOfferViewModel<?>> exten
                                     .dontShowAgainId(key)
                                     .actionButtonTextWithGoTo("navigation.portfolio.myOpenOffers")
                                     .onAction(this::closeAndGoToOpenOffers)
-                                    .onClose(this::closeAndGoToOpenOffers)
+                                    .onClose(this::close)
                                     .show(),
                             1);
                 } else {
@@ -1149,7 +1148,7 @@ public abstract class MutableOfferView<M extends MutableOfferViewModel<?>> exten
         });
 
         nextButton.setOnAction(e -> {
-            if (model.isPriceInRange()) {
+            if (model.isPriceInRange() && model.areAmountsInRange()) {
                 if (DevEnv.isDaoTradingActivated())
                     showFeeOption();
                 else

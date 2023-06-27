@@ -17,13 +17,17 @@
 
 package bisq.core.trade.protocol.bisq_v1.tasks.buyer;
 
+import bisq.core.btc.wallet.BtcWalletService;
 import bisq.core.trade.bisq_v1.TradeDataValidation;
 import bisq.core.trade.model.bisq_v1.Trade;
 import bisq.core.trade.protocol.bisq_v1.tasks.TradeTask;
 
 import bisq.common.taskrunner.TaskRunner;
+import bisq.common.util.Tuple2;
 
 import org.bitcoinj.core.Transaction;
+
+import java.util.List;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,17 +44,46 @@ public class BuyerVerifiesFinalDelayedPayoutTx extends TradeTask {
         try {
             runInterceptHook();
 
-            Transaction delayedPayoutTx = trade.getDelayedPayoutTx();
-            checkNotNull(delayedPayoutTx, "trade.getDelayedPayoutTx() must not be null");
+            BtcWalletService btcWalletService = processModel.getBtcWalletService();
+            Transaction finalDelayedPayoutTx = trade.getDelayedPayoutTx();
+            checkNotNull(finalDelayedPayoutTx, "trade.getDelayedPayoutTx() must not be null");
+
             // Check again tx
             TradeDataValidation.validateDelayedPayoutTx(trade,
-                    delayedPayoutTx,
-                    processModel.getBtcWalletService());
+                    finalDelayedPayoutTx,
+                    btcWalletService);
 
-            // Now as we know the deposit tx we can also verify the input
             Transaction depositTx = trade.getDepositTx();
             checkNotNull(depositTx, "trade.getDepositTx() must not be null");
-            TradeDataValidation.validatePayoutTxInput(depositTx, delayedPayoutTx);
+            // Now as we know the deposit tx we can also verify the input
+            TradeDataValidation.validatePayoutTxInput(depositTx, finalDelayedPayoutTx);
+
+            long inputAmount = depositTx.getOutput(0).getValue().value;
+            long tradeTxFeeAsLong = trade.getTradeTxFeeAsLong();
+            int selectionHeight = processModel.getBurningManSelectionHeight();
+            List<Tuple2<Long, String>> delayedPayoutTxReceivers = processModel.getDelayedPayoutTxReceiverService().getReceivers(
+                    selectionHeight,
+                    inputAmount,
+                    tradeTxFeeAsLong);
+            log.info("Verify delayedPayoutTx using selectionHeight {} and receivers {}", selectionHeight, delayedPayoutTxReceivers);
+            long lockTime = trade.getLockTime();
+            Transaction buyersDelayedPayoutTx = processModel.getTradeWalletService().createDelayedUnsignedPayoutTx(
+                    depositTx,
+                    delayedPayoutTxReceivers,
+                    lockTime);
+
+            if (!buyersDelayedPayoutTx.getTxId().equals(finalDelayedPayoutTx.getTxId())) {
+                String errorMsg = "TxIds of buyersDelayedPayoutTx and finalDelayedPayoutTx must be the same.";
+                log.error("{} \nbuyersDelayedPayoutTx={}, \nfinalDelayedPayoutTx={}, " +
+                                "\nBtcWalletService.chainHeight={}, " +
+                                "\nDaoState.chainHeight={}, " +
+                                "\nisDaoStateIsInSync={}",
+                        errorMsg, buyersDelayedPayoutTx, finalDelayedPayoutTx,
+                        processModel.getBtcWalletService().getBestChainHeight(),
+                        processModel.getDaoFacade().getChainHeight(),
+                        processModel.getDaoFacade().isDaoStateReadyAndInSync());
+                throw new IllegalArgumentException(errorMsg);
+            }
 
             complete();
         } catch (TradeDataValidation.ValidationException e) {

@@ -65,6 +65,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.Control;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
@@ -195,7 +196,10 @@ public class FormBuilder {
         return addSimpleMarkdownLabel(gridPane, rowIndex, null, 0);
     }
 
-    public static SimpleMarkdownLabel addSimpleMarkdownLabel(GridPane gridPane, int rowIndex, String markdown, double top) {
+    public static SimpleMarkdownLabel addSimpleMarkdownLabel(GridPane gridPane,
+                                                             int rowIndex,
+                                                             String markdown,
+                                                             double top) {
         SimpleMarkdownLabel label = new SimpleMarkdownLabel(markdown);
 
         GridPane.setRowIndex(label, rowIndex);
@@ -678,42 +682,13 @@ public class FormBuilder {
                                                                   String title,
                                                                   double top) {
         DatePicker datePicker = new JFXDatePicker();
+        // fix display issue from github.com/bisq-network/bisq/issues/6216 and github.com/sshahine/JFoenix/issues/1245
+        datePicker.getEditor().setMinWidth(250);
+        datePicker.getEditor().setMaxWidth(Control.USE_PREF_SIZE);
+        datePicker.getEditor().setPrefWidth(Control.USE_PREF_SIZE);
         Tuple2<Label, VBox> topLabelWithVBox = addTopLabelWithVBox(gridPane, rowIndex, columnIndex, title, datePicker, top);
         return new Tuple2<>(topLabelWithVBox.first, datePicker);
     }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////
-    // 2 DatePickers
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
-    public static Tuple2<DatePicker, DatePicker> add2TopLabelDatePicker(GridPane gridPane,
-                                                                        int rowIndex,
-                                                                        int columnIndex,
-                                                                        String title1,
-                                                                        String title2,
-                                                                        double top) {
-        DatePicker datePicker1 = new JFXDatePicker();
-        Tuple2<Label, VBox> topLabelWithVBox1 = getTopLabelWithVBox(title1, datePicker1);
-        VBox vBox1 = topLabelWithVBox1.second;
-
-        DatePicker datePicker2 = new JFXDatePicker();
-        Tuple2<Label, VBox> topLabelWithVBox2 = getTopLabelWithVBox(title2, datePicker2);
-        VBox vBox2 = topLabelWithVBox2.second;
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox hBox = new HBox();
-        hBox.setSpacing(10);
-        hBox.getChildren().addAll(spacer, vBox1, vBox2);
-
-        GridPane.setRowIndex(hBox, rowIndex);
-        GridPane.setColumnIndex(hBox, columnIndex);
-        GridPane.setMargin(hBox, new Insets(top, 0, 0, 0));
-        gridPane.getChildren().add(hBox);
-        return new Tuple2<>(datePicker1, datePicker2);
-    }
-
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Label  + TxIdTextField
@@ -901,7 +876,6 @@ public class FormBuilder {
         GridPane.setMargin(hBox, new Insets(Layout.FLOATING_LABEL_DISTANCE, 0, 0, 0));
         return new Tuple3<>(topLabelWithVBox.first, inputTextField, toggleButton);
     }
-
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -2274,12 +2248,12 @@ public class FormBuilder {
     // Icons
     ///////////////////////////////////////////////////////////////////////////////////////////
 
-    public static Text getIconForLabel(GlyphIcons icon, String iconSize, Label label, String style) {
+    public static Text getIconForLabel(GlyphIcons icon, String iconSize, Label label, String styleClass) {
         if (icon.fontFamily().equals(MATERIAL_DESIGN_ICONS)) {
             final Text textIcon = MaterialDesignIconFactory.get().createIcon(icon, iconSize);
             textIcon.setOpacity(0.7);
-            if (style != null) {
-                textIcon.getStyleClass().add(style);
+            if (styleClass != null) {
+                textIcon.getStyleClass().add(styleClass);
             }
             label.setContentDisplay(ContentDisplay.LEFT);
             label.setGraphic(textIcon);
@@ -2305,8 +2279,8 @@ public class FormBuilder {
         return getRegularIconForLabel(icon, label, null);
     }
 
-    public static Text getRegularIconForLabel(GlyphIcons icon, Label label, String style) {
-        return getIconForLabel(icon, "1.231em", label, style);
+    public static Text getRegularIconForLabel(GlyphIcons icon, Label label, String styleClass) {
+        return getIconForLabel(icon, "1.231em", label, styleClass);
     }
 
     public static Text getIcon(GlyphIcons icon) {
@@ -2384,26 +2358,31 @@ public class FormBuilder {
         }
     }
 
-    public static <T> TableView<T> addTableViewWithHeader(GridPane gridPane, int rowIndex, String headerText) {
+    public static <T> Tuple2<TableView<T>, TitledGroupBg> addTableViewWithHeader(GridPane gridPane,
+                                                                                 int rowIndex,
+                                                                                 String headerText) {
         return addTableViewWithHeader(gridPane, rowIndex, headerText, 0, null);
     }
 
-    public static <T> TableView<T> addTableViewWithHeader(GridPane gridPane,
-                                                          int rowIndex,
-                                                          String headerText,
-                                                          String groupStyle) {
+    public static <T> Tuple2<TableView<T>, TitledGroupBg> addTableViewWithHeader(GridPane gridPane,
+                                                                                 int rowIndex,
+                                                                                 String headerText,
+                                                                                 String groupStyle) {
         return addTableViewWithHeader(gridPane, rowIndex, headerText, 0, groupStyle);
     }
 
-    public static <T> TableView<T> addTableViewWithHeader(GridPane gridPane, int rowIndex, String headerText, int top) {
+    public static <T> Tuple2<TableView<T>, TitledGroupBg> addTableViewWithHeader(GridPane gridPane,
+                                                                                 int rowIndex,
+                                                                                 String headerText,
+                                                                                 int top) {
         return addTableViewWithHeader(gridPane, rowIndex, headerText, top, null);
     }
 
-    public static <T> TableView<T> addTableViewWithHeader(GridPane gridPane,
-                                                          int rowIndex,
-                                                          String headerText,
-                                                          int top,
-                                                          String groupStyle) {
+    public static <T> Tuple2<TableView<T>, TitledGroupBg> addTableViewWithHeader(GridPane gridPane,
+                                                                                 int rowIndex,
+                                                                                 String headerText,
+                                                                                 int top,
+                                                                                 String groupStyle) {
         TitledGroupBg titledGroupBg = addTitledGroupBg(gridPane, rowIndex, 1, headerText, top);
 
         if (groupStyle != null) titledGroupBg.getStyleClass().add(groupStyle);
@@ -2414,7 +2393,40 @@ public class FormBuilder {
         gridPane.getChildren().add(tableView);
         tableView.setPlaceholder(new AutoTooltipLabel(Res.get("table.placeholder.noData")));
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        return tableView;
+        return new Tuple2<>(tableView, titledGroupBg);
+    }
+
+    public static <T> Tuple3<InputTextField, TableView<T>, HBox> addTableViewWithHeaderAndFilterField(GridPane gridPane,
+                                                                                                      int rowIndex,
+                                                                                                      String headerText,
+                                                                                                      String filterPromptText,
+                                                                                                      int top) {
+        TitledGroupBg titledGroupBg = new TitledGroupBg();
+        titledGroupBg.setText(headerText);
+
+        InputTextField filterField = new InputTextField();
+        filterField.setLabelFloat(true);
+        filterField.setPromptText(filterPromptText);
+        filterField.setMinWidth(200);
+
+        Region spacer = new Region();
+        HBox hBox = new HBox(20, titledGroupBg, spacer, filterField);
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox.setMargin(filterField, new Insets(-12, 2, 0, 0));
+
+        hBox.prefWidthProperty().bind(gridPane.widthProperty());
+        GridPane.setRowIndex(hBox, rowIndex);
+        GridPane.setRowSpan(hBox, 1);
+        GridPane.setMargin(hBox, new Insets(top + 8, -10, -12, -10));
+        gridPane.getChildren().add(hBox);
+
+        TableView<T> tableView = new TableView<>();
+        GridPane.setRowIndex(tableView, rowIndex);
+        GridPane.setMargin(tableView, new Insets(top + 30, -10, 5, -10));
+        gridPane.getChildren().add(tableView);
+        tableView.setPlaceholder(new AutoTooltipLabel(Res.get("table.placeholder.noData")));
+        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        return new Tuple3<>(filterField, tableView, hBox);
     }
 }
 

@@ -147,6 +147,10 @@ public final class GrpcClient {
         return walletsServiceRequest.unsetTxFeeRate();
     }
 
+    public List<TxInfo> getTransactions() {
+        return walletsServiceRequest.getTransactions();
+    }
+
     public TxInfo getTransaction(String txId) {
         return walletsServiceRequest.getTransaction(txId);
     }
@@ -293,16 +297,16 @@ public final class GrpcClient {
         return offersServiceRequest.getBsqSwapOffers(direction);
     }
 
-    public List<OfferInfo> getOffers(String direction, String currencyCode) {
-        return offersServiceRequest.getOffers(direction, currencyCode);
+    public List<OfferInfo> getOffers(String direction, String currencyCode, boolean all) {
+        return offersServiceRequest.getOffers(direction, currencyCode, all);
     }
 
-    public List<OfferInfo> getOffersSortedByDate(String currencyCode) {
-        return offersServiceRequest.getOffersSortedByDate(currencyCode);
+    public List<OfferInfo> getOffersSortedByDate(String currencyCode, boolean all) {
+        return offersServiceRequest.getOffersSortedByDate(currencyCode, all);
     }
 
-    public List<OfferInfo> getOffersSortedByDate(String direction, String currencyCode) {
-        return offersServiceRequest.getOffersSortedByDate(direction, currencyCode);
+    public List<OfferInfo> getOffersSortedByDate(String direction, String currencyCode, boolean all) {
+        return offersServiceRequest.getOffersSortedByDate(direction, currencyCode, all);
     }
 
     public List<OfferInfo> getBsqSwapOffersSortedByDate() {

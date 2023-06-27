@@ -151,9 +151,8 @@ public abstract class DisputeAgentView extends DisputeView implements MultipleHo
     }
 
     private String getValidationExceptionMessage(DisputeValidation.ValidationException exception) {
-        Dispute dispute = exception.getDispute();
         if (exception instanceof DisputeValidation.AddressException) {
-            return getAddressExceptionMessage(dispute);
+            return getAddressExceptionMessage(exception.getDispute());
         } else if (exception.getMessage() != null && !exception.getMessage().isEmpty()) {
             return exception.getMessage();
         } else {
@@ -258,7 +257,8 @@ public abstract class DisputeAgentView extends DisputeView implements MultipleHo
     private TableColumn<Dispute, Dispute> getAlertColumn() {
         TableColumn<Dispute, Dispute> column = new AutoTooltipTableColumn<>("Alert") {
             {
-                setMinWidth(50);
+                setMinWidth(20);
+                setPrefWidth(20);
             }
         };
         column.getStyleClass().add("last-column");
@@ -353,6 +353,24 @@ public abstract class DisputeAgentView extends DisputeView implements MultipleHo
     protected void maybeAddProcessColumnsForAgent() {
         tableView.getColumns().add(getProcessColumn());
         tableView.getColumns().add(getChatColumn());
+    }
+
+    @Override
+    protected void openChat(Dispute dispute) {
+        if (disputeManager.agentCheckDisputeHealth(dispute)) {
+            super.openChat(dispute);
+        } else {
+            new Popup().headLine(Res.get("support.warning.ticketNotAcknowledged"))
+                    .confirmation(Res.get("support.resendTicket"))
+                    .actionButtonText(Res.get("shared.yes"))
+                    .onAction(() -> {
+                        disputeManager.sendDisputeOpeningMsg(dispute);
+                        super.openChat(dispute);
+                    })
+                    .closeButtonText(Res.get("shared.no"))
+                    .onClose(() -> super.openChat(dispute))
+                    .show();
+        }
     }
 
     @Override

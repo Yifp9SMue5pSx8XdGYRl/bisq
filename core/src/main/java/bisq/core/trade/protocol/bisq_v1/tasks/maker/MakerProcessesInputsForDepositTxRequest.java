@@ -79,6 +79,14 @@ public class MakerProcessesInputsForDepositTxRequest extends TradeTask {
 
             tradingPeer.setAccountId(nonEmptyStringOf(request.getTakerAccountId()));
 
+            int takersBurningManSelectionHeight = request.getBurningManSelectionHeight();
+            checkArgument(takersBurningManSelectionHeight > 0, "takersBurningManSelectionHeight must not be 0");
+
+            int makersBurningManSelectionHeight = processModel.getDelayedPayoutTxReceiverService().getBurningManSelectionHeight();
+            checkArgument(takersBurningManSelectionHeight == makersBurningManSelectionHeight,
+                    "takersBurningManSelectionHeight does no match makersBurningManSelectionHeight");
+            processModel.setBurningManSelectionHeight(makersBurningManSelectionHeight);
+
             // We set the taker fee only in the processModel yet not in the trade as the tx was only created but not
             // published yet. Once it was published we move it to trade. The takerFeeTx should be sent in a later
             // message but that cannot be changed due backward compatibility issues. It is a left over from the

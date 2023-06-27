@@ -49,7 +49,7 @@ import bisq.core.util.coin.CoinFormatter;
 import bisq.common.Timer;
 import bisq.common.UserThread;
 import bisq.common.handlers.ResultHandler;
-import bisq.common.util.Utilities;
+import bisq.common.util.SingleThreadExecutorUtils;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
@@ -81,6 +81,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -116,7 +117,7 @@ class CoreWalletsService {
     @Nullable
     private KeyParameter tempAesKey;
 
-    private final ListeningExecutorService executor = Utilities.getSingleThreadListeningExecutor("CoreWalletsService");
+    private final ListeningExecutorService executor = SingleThreadExecutorUtils.getSingleThreadListeningExecutor("CoreWalletsService");
 
     @Inject
     public CoreWalletsService(AppStartupState appStartupState,
@@ -289,6 +290,7 @@ class CoreWalletsService {
             //  See WithdrawalView # onWithdraw (and refactor).
             Transaction feeEstimationTransaction =
                     btcWalletService.getFeeEstimationTransactionForMultipleAddresses(fromAddresses,
+                            address,
                             receiverAmount,
                             txFeePerVbyte);
             if (feeEstimationTransaction == null)
@@ -410,6 +412,10 @@ class CoreWalletsService {
                 feeService.getMinFeePerVByte(),
                 feeService.getTxFeePerVbyte().value,
                 feeService.getLastRequest());
+    }
+
+    Set<Transaction> getTransactions() {
+        return btcWalletService.getTransactions(false);
     }
 
     Transaction getTransaction(String txId) {

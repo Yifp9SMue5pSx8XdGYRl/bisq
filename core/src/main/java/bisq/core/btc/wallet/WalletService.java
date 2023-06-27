@@ -72,6 +72,7 @@ import org.bitcoinj.wallet.listeners.WalletReorganizeEventListener;
 
 import javax.inject.Inject;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Multiset;
@@ -87,6 +88,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -122,6 +124,7 @@ public abstract class WalletService {
     private final WalletChangeEventListener cacheInvalidationListener;
     private final AtomicReference<Multiset<Address>> txOutputAddressCache = new AtomicReference<>();
     private final AtomicReference<SetMultimap<Address, Transaction>> addressToMatchingTxSetCache = new AtomicReference<>();
+    private final AtomicReference<Map<Sha256Hash, Transaction>> txByIdCache = new AtomicReference<>();
     @Getter
     protected Wallet wallet;
     @Getter
@@ -147,6 +150,7 @@ public abstract class WalletService {
         cacheInvalidationListener = wallet -> {
             txOutputAddressCache.set(null);
             addressToMatchingTxSetCache.set(null);
+            txByIdCache.set(null);
         };
     }
 
@@ -291,7 +295,8 @@ public abstract class WalletService {
                 continue;
             }
             if (!connectedOutput.isMine(wallet)) {
-                log.error("connectedOutput is not mine");
+                log.info("ConnectedOutput is not mine. This can be the case for BSQ transactions where the " +
+                        "input gets signed by the other wallet. connectedOutput={}", connectedOutput);
                 continue;
             }
 
@@ -439,15 +444,32 @@ public abstract class WalletService {
     public TransactionConfidence getConfidenceForAddress(Address address) {
         List<TransactionConfidence> transactionConfidenceList = new ArrayList<>();
         if (wallet != null) {
-            Set<Transaction> transactions = getAddressToMatchingTxSetMultiset().get(address);
+            Set<Transaction> transactions = getAddressToMatchingTxSetMultimap().get(address);
             transactionConfidenceList.addAll(transactions.stream().map(tx ->
                     getTransactionConfidence(tx, address)).collect(Collectors.toList()));
         }
         return getMostRecentConfidence(transactionConfidenceList);
     }
 
-    private SetMultimap<Address, Transaction> getAddressToMatchingTxSetMultiset() {
-        return addressToMatchingTxSetCache.updateAndGet(set -> set != null ? set : computeAddressToMatchingTxSetMultimap());
+    @Nullable
+    public TransactionConfidence getConfidenceForAddressFromBlockHeight(Address address, long targetHeight) {
+        List<TransactionConfidence> transactionConfidenceList = new ArrayList<>();
+        if (wallet != null) {
+            Set<Transaction> transactions = getAddressToMatchingTxSetMultimap().get(address);
+            // "acceptable confidence" is either a new (pending) Tx, or a Tx confirmed after target block height
+            transactionConfidenceList.addAll(transactions.stream()
+                    .map(tx -> getTransactionConfidence(tx, address))
+                    .filter(Objects::nonNull)
+                    .filter(con -> con.getConfidenceType() == TransactionConfidence.ConfidenceType.PENDING ||
+                            (con.getConfidenceType() == TransactionConfidence.ConfidenceType.BUILDING &&
+                                    con.getAppearedAtChainHeight() > targetHeight))
+                    .collect(Collectors.toList()));
+        }
+        return getMostRecentConfidence(transactionConfidenceList);
+    }
+
+    private SetMultimap<Address, Transaction> getAddressToMatchingTxSetMultimap() {
+        return addressToMatchingTxSetCache.updateAndGet(map -> map != null ? map : computeAddressToMatchingTxSetMultimap());
     }
 
     private SetMultimap<Address, Transaction> computeAddressToMatchingTxSetMultimap() {
@@ -462,15 +484,23 @@ public abstract class WalletService {
     }
 
     @Nullable
-    public TransactionConfidence getConfidenceForTxId(String txId) {
-        if (wallet != null) {
-            Set<Transaction> transactions = wallet.getTransactions(false);
-            for (Transaction tx : transactions) {
-                if (tx.getTxId().toString().equals(txId))
-                    return tx.getConfidence();
+    public TransactionConfidence getConfidenceForTxId(@Nullable String txId) {
+        if (wallet != null && txId != null && !txId.isEmpty()) {
+            Transaction tx = getTxByIdMap().get(Sha256Hash.wrap(txId));
+            if (tx != null) {
+                return tx.getConfidence();
             }
         }
         return null;
+    }
+
+    private Map<Sha256Hash, Transaction> getTxByIdMap() {
+        return txByIdCache.updateAndGet(map -> map != null ? map : computeTxByIdMap());
+    }
+
+    private Map<Sha256Hash, Transaction> computeTxByIdMap() {
+        return wallet.getTransactions(false).stream()
+                .collect(ImmutableMap.toImmutableMap(Transaction::getTxId, tx -> tx));
     }
 
     @Nullable
@@ -721,6 +751,10 @@ public abstract class WalletService {
         return wallet.isEncrypted();
     }
 
+    public List<Transaction> getAllRecentTransactions(boolean includeDead) {
+        return getRecentTransactions(Integer.MAX_VALUE, includeDead);
+    }
+
     public List<Transaction> getRecentTransactions(int numTransactions, boolean includeDead) {
         // Returns a list ordered by tx.getUpdateTime() desc
         return wallet.getRecentTransactions(numTransactions, includeDead);
@@ -760,7 +794,7 @@ public abstract class WalletService {
     }
 
     @Nullable
-    public Transaction getTransaction(String txId) {
+    public Transaction getTransaction(@Nullable String txId) {
         if (txId == null) {
             return null;
         }

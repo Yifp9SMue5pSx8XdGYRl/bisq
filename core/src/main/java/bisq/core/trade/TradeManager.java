@@ -77,6 +77,7 @@ import bisq.network.p2p.P2PService;
 import bisq.network.p2p.network.TorNetworkNode;
 
 import bisq.common.ClockWatcher;
+import bisq.common.app.DevEnv;
 import bisq.common.config.Config;
 import bisq.common.crypto.KeyRing;
 import bisq.common.handlers.ErrorMessageHandler;
@@ -155,7 +156,18 @@ public class TradeManager implements PersistedDataHost, DecryptedDirectMessageLi
     private final Provider provider;
     private final ClockWatcher clockWatcher;
 
-    private final Map<String, TradeProtocol> tradeProtocolByTradeId = new HashMap<>();
+    // We use uid for that map not the trade ID
+    private final Map<String, TradeProtocol> tradeProtocolByTradeUid = new HashMap<>();
+
+    // We maintain a map with trade (offer) ID to reset a pending trade protocol for the same offer.
+    // Pending trade protocol could happen in edge cases when an early error did not cause a removal of the
+    // offer and the same peer takes the offer later again. Usually it is prevented for the taker to take again after a
+    // failure but that is only based on failed trades state and it can be that either the taker deletes the failed trades
+    // file or it was not persisted. Such rare cases could lead to a pending protocol and when taker takes again the
+    // offer the message listener from the old pending protocol gets invoked and processes the messages based on
+    // potentially outdated model data (e.g. old inputs).
+    private final Map<String, TradeProtocol> pendingTradeProtocolByTradeId = new HashMap<>();
+
     private final PersistenceManager<TradableList<Trade>> persistenceManager;
     private final TradableList<Trade> tradableList = new TradableList<>();
     @Getter
@@ -407,13 +419,18 @@ public class TradeManager implements PersistedDataHost, DecryptedDirectMessageLi
 
     public TradeProtocol getTradeProtocol(TradeModel trade) {
         String uid = trade.getUid();
-        if (tradeProtocolByTradeId.containsKey(uid)) {
-            return tradeProtocolByTradeId.get(uid);
+        if (tradeProtocolByTradeUid.containsKey(uid)) {
+            return tradeProtocolByTradeUid.get(uid);
         } else {
             TradeProtocol tradeProtocol = TradeProtocolFactory.getNewTradeProtocol(trade);
-            TradeProtocol prev = tradeProtocolByTradeId.put(uid, tradeProtocol);
+            TradeProtocol prev = tradeProtocolByTradeUid.put(uid, tradeProtocol);
             if (prev != null) {
                 log.error("We had already an entry with uid {}", trade.getUid());
+            }
+
+            TradeProtocol pending = pendingTradeProtocolByTradeId.put(trade.getId(), tradeProtocol);
+            if (pending != null) {
+                pending.reset();
             }
 
             return tradeProtocol;
@@ -617,12 +634,17 @@ public class TradeManager implements PersistedDataHost, DecryptedDirectMessageLi
 
     private TradeProtocol createTradeProtocol(TradeModel tradeModel) {
         TradeProtocol tradeProtocol = TradeProtocolFactory.getNewTradeProtocol(tradeModel);
-        TradeProtocol prev = tradeProtocolByTradeId.put(tradeModel.getUid(), tradeProtocol);
+        TradeProtocol prev = tradeProtocolByTradeUid.put(tradeModel.getUid(), tradeProtocol);
         if (prev != null) {
             log.error("We had already an entry with uid {}", tradeModel.getUid());
         }
         if (tradeModel instanceof Trade) {
             tradableList.add((Trade) tradeModel);
+        }
+
+        TradeProtocol pending = pendingTradeProtocolByTradeId.put(tradeModel.getId(), tradeProtocol);
+        if (pending != null) {
+            pending.reset();
         }
 
         // For BsqTrades we only store the trade at completion
@@ -644,6 +666,7 @@ public class TradeManager implements PersistedDataHost, DecryptedDirectMessageLi
                 user,
                 mediatorManager,
                 tradeStatisticsManager,
+                provider.getDelayedPayoutTxReceiverService(),
                 isTakerApiUser);
     }
 
@@ -729,6 +752,9 @@ public class TradeManager implements PersistedDataHost, DecryptedDirectMessageLi
         clockWatcher.addListener(new ClockWatcher.Listener() {
             @Override
             public void onSecondTick() {
+                if (DevEnv.isDevMode()) {
+                    updateTradePeriodState();
+                }
             }
 
             @Override
@@ -743,6 +769,12 @@ public class TradeManager implements PersistedDataHost, DecryptedDirectMessageLi
             if (!trade.isPayoutPublished()) {
                 Date maxTradePeriodDate = trade.getMaxTradePeriodDate();
                 Date halfTradePeriodDate = trade.getHalfTradePeriodDate();
+                if (DevEnv.isDevMode()) {
+                    TransactionConfidence confidenceForTxId = btcWalletService.getConfidenceForTxId(trade.getDepositTxId());
+                    if (confidenceForTxId != null && confidenceForTxId.getDepthInBlocks() > 4) {
+                        trade.setTradePeriodState(Trade.TradePeriodState.TRADE_PERIOD_OVER);
+                    }
+                }
                 if (maxTradePeriodDate != null && halfTradePeriodDate != null) {
                     Date now = new Date();
                     if (now.after(maxTradePeriodDate)) {

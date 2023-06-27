@@ -56,16 +56,15 @@ public class LocalhostNetworkNode extends NetworkNode {
 
     public LocalhostNetworkNode(int port,
                                 NetworkProtoResolver networkProtoResolver,
-                                @Nullable NetworkFilter networkFilter) {
-        super(port, networkProtoResolver, networkFilter);
+                                @Nullable BanFilter banFilter,
+                                int maxConnections) {
+        super(port, networkProtoResolver, banFilter, maxConnections);
     }
 
     @Override
     public void start(@Nullable SetupListener setupListener) {
         if (setupListener != null)
             addSetupListener(setupListener);
-
-        createExecutorService();
 
         // simulate tor connection delay
         UserThread.runAfter(() -> {

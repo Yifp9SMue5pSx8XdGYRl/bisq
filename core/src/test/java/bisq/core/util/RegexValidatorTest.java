@@ -24,16 +24,16 @@ import bisq.core.util.validation.RegexValidatorFactory;
 
 import java.util.Locale;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class RegexValidatorTest {
 
-    @Before
+    @BeforeEach
     public void setup() {
         Locale.setDefault(new Locale("en", "US"));
         GlobalSettings.setLocale(new Locale("en", "US"));
@@ -64,7 +64,7 @@ public class RegexValidatorTest {
 
         // onion v3 addresses
         assertFalse(regexValidator.validate("32zzibxmqi2ybxpqyggwwuwz7a3lbvtzoloti7cxoevyvijexvgsfei.onion:8333").isValid); // 1 missing char
-        assertTrue(regexValidator.validate("wizseedscybbttk4bmb2lzvbuk2jtect37lcpva4l3twktmkzemwbead.onion:8000").isValid);
+        assertTrue(regexValidator.validate("wizseed7ab2gi3x267xahrp2pkndyrovczezzb46jk6quvguciuyqrid.onion:8000").isValid);
 
         // ipv4 addresses
         assertTrue(regexValidator.validate("12.34.56.78").isValid);
@@ -120,7 +120,7 @@ public class RegexValidatorTest {
 
         // onion v3 addresses
         assertFalse(regexValidator.validate("32zzibxmqi2ybxpqyggwwuwz7a3lbvtzoloti7cxoevyvijexvgsfei.onion:8333").isValid); // 1 missing char
-        assertTrue(regexValidator.validate("wizseedscybbttk4bmb2lzvbuk2jtect37lcpva4l3twktmkzemwbead.onion:8000").isValid);
+        assertTrue(regexValidator.validate("wizseed7ab2gi3x267xahrp2pkndyrovczezzb46jk6quvguciuyqrid.onion:8000").isValid);
 
     }
 
@@ -147,7 +147,7 @@ public class RegexValidatorTest {
 
         // onion v3 addresses
         assertFalse(regexValidator.validate("32zzibxmqi2ybxpqyggwwuwz7a3lbvtzoloti7cxoevyvijexvgsfei.onion:8333").isValid); // 1 missing char
-        assertFalse(regexValidator.validate("wizseedscybbttk4bmb2lzvbuk2jtect37lcpva4l3twktmkzemwbead.onion:8000").isValid);
+        assertFalse(regexValidator.validate("wizseed7ab2gi3x267xahrp2pkndyrovczezzb46jk6quvguciuyqrid.onion:8000").isValid);
 
         // ipv4 addresses
         assertFalse(regexValidator.validate("12.34.56.78").isValid);
@@ -236,7 +236,7 @@ public class RegexValidatorTest {
 
         // onion v3 addresses
         assertFalse(regexValidator.validate("32zzibxmqi2ybxpqyggwwuwz7a3lbvtzoloti7cxoevyvijexvgsfei.onion:8333").isValid); // 1 missing char
-        assertFalse(regexValidator.validate("wizseedscybbttk4bmb2lzvbuk2jtect37lcpva4l3twktmkzemwbead.onion:8000").isValid);
+        assertFalse(regexValidator.validate("wizseed7ab2gi3x267xahrp2pkndyrovczezzb46jk6quvguciuyqrid.onion:8000").isValid);
 
         // ipv4 addresses
         assertFalse(regexValidator.validate("12.34.56.78").isValid);

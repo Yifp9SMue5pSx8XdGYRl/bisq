@@ -54,6 +54,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import bisq.core.provider.price.MarketPrice;
+import java.io.PrintWriter;
 
 /**
  * Handles storage and retrieval of offers.
@@ -198,6 +200,15 @@ public class OfferBookService {
     }
 
     public List<Offer> getOffers() {
+        String now = dtf.format(LocalDateTime.now());
+        String marketFilepath = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\market.pb", now);
+        try (PrintWriter output = new PrintWriter(FileUtils.openOutputStream(new File(filepath)))) {
+            MarketPrice price = priceFeedService.getMarketPrice("BTC/USD");
+            output.printf("{timestamp: %d, price: %f}\n", price.timestampSec, price.price);
+        } catch (Exception e) {
+            System.err.printf("~~~ Failed to save market price proto to '%s': %s\n\n", filepath, e);
+        }
+
         return p2PService
             .getDataMap()
             .values()
@@ -207,11 +218,7 @@ public class OfferBookService {
                 OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
                 Offer offer = new Offer(offerPayloadBase);
                 offer.setPriceFeedService(priceFeedService);
-                String filepath = String.format(
-                        "C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb",
-                        dtf.format(LocalDateTime.now()),
-                        offer.getId());
-
+                filepath = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb", now, offer.getId());
                 try (FileOutputStream output = FileUtils.openOutputStream(new File(filepath))) {
                     // output.write(ProtoUtils.util.JsonFormat.printer().print(offer.toProtoMessage()));
                     // System.out.printf("proto message (((%s)))\n\n\n", offer.toProtoMessage());

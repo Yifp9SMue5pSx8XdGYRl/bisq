@@ -27,8 +27,8 @@ public class MarketPrice {
     public static final long MARKET_PRICE_MAX_AGE_SEC = 1800;  // 30 min
 
     private final String currencyCode;
-    private final double price;
-    private final long timestampSec;
+    public final double price;
+    public final long timestampSec;
     @Getter
     private final boolean isExternallyProvidedPrice;
 

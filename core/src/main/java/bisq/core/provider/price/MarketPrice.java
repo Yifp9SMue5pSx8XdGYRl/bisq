@@ -26,7 +26,7 @@ import lombok.Value;
 public class MarketPrice {
     public static final long MARKET_PRICE_MAX_AGE_SEC = 1800;  // 30 min
 
-    private final String currencyCode;
+    public final String currencyCode;
     public final double price;
     public final long timestampSec;
     @Getter

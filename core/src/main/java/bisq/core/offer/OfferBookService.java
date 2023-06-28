@@ -14,10 +14,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Bisq. If not, see <http://www.gnu.org/licenses/>.
  */
-
 package bisq.core.offer;
 
 import java.util.stream.Stream;
+
 import bisq.core.filter.FilterManager;
 import bisq.core.locale.Res;
 import bisq.core.provider.price.PriceFeedService;
@@ -50,21 +50,28 @@ import lombok.extern.slf4j.Slf4j;
 import javax.annotation.Nullable;
 
 import org.apache.commons.io.FileUtils;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
 import bisq.core.provider.price.MarketPrice;
 import java.io.PrintWriter;
 
+import protobuf.MarketPricePb;
+import protobuf.MarketPrices;
+
 /**
- * Handles storage and retrieval of offers.
- * Uses an invalidation flag to only request the full offer map in case there was a change (anyone has added or removed an offer).
+ * Handles storage and retrieval of offers. Uses an invalidation flag to only
+ * request the full offer map in case there was a change (anyone has added or
+ * removed an offer).
  */
 @Slf4j
 public class OfferBookService {
 
     public interface OfferBookChangedListener {
+
         void onAdded(Offer offer);
 
         void onRemoved(Offer offer);
@@ -77,17 +84,15 @@ public class OfferBookService {
     private final JsonFileManager jsonFileManager;
     private final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
-
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Constructor
     ///////////////////////////////////////////////////////////////////////////////////////////
-
     @Inject
     public OfferBookService(P2PService p2PService,
-                            PriceFeedService priceFeedService,
-                            FilterManager filterManager,
-                            @Named(Config.STORAGE_DIR) File storageDir,
-                            @Named(Config.DUMP_STATISTICS) boolean dumpStatistics) {
+            PriceFeedService priceFeedService,
+            FilterManager filterManager,
+            @Named(Config.STORAGE_DIR) File storageDir,
+            @Named(Config.DUMP_STATISTICS) boolean dumpStatistics) {
         this.p2PService = p2PService;
         this.priceFeedService = priceFeedService;
         this.filterManager = filterManager;
@@ -140,11 +145,9 @@ public class OfferBookService {
         }
     }
 
-
     ///////////////////////////////////////////////////////////////////////////////////////////
     // API
     ///////////////////////////////////////////////////////////////////////////////////////////
-
     public void addOffer(Offer offer, ResultHandler resultHandler, ErrorMessageHandler errorMessageHandler) {
         if (filterManager.requireUpdateToNewVersionForTrading()) {
             errorMessageHandler.handleErrorMessage(Res.get("popup.warning.mandatoryUpdate.trading"));
@@ -160,8 +163,8 @@ public class OfferBookService {
     }
 
     public void refreshTTL(OfferPayloadBase offerPayloadBase,
-                           ResultHandler resultHandler,
-                           ErrorMessageHandler errorMessageHandler) {
+            ResultHandler resultHandler,
+            ErrorMessageHandler errorMessageHandler) {
         if (filterManager.requireUpdateToNewVersionForTrading()) {
             errorMessageHandler.handleErrorMessage(Res.get("popup.warning.mandatoryUpdate.trading"));
             return;
@@ -176,69 +179,71 @@ public class OfferBookService {
     }
 
     public void activateOffer(Offer offer,
-                              @Nullable ResultHandler resultHandler,
-                              @Nullable ErrorMessageHandler errorMessageHandler) {
+            @Nullable ResultHandler resultHandler,
+            @Nullable ErrorMessageHandler errorMessageHandler) {
         addOffer(offer, resultHandler, errorMessageHandler);
     }
 
     public void deactivateOffer(OfferPayloadBase offerPayloadBase,
-                                @Nullable ResultHandler resultHandler,
-                                @Nullable ErrorMessageHandler errorMessageHandler) {
+            @Nullable ResultHandler resultHandler,
+            @Nullable ErrorMessageHandler errorMessageHandler) {
         removeOffer(offerPayloadBase, resultHandler, errorMessageHandler);
     }
 
     public void removeOffer(OfferPayloadBase offerPayloadBase,
-                            @Nullable ResultHandler resultHandler,
-                            @Nullable ErrorMessageHandler errorMessageHandler) {
+            @Nullable ResultHandler resultHandler,
+            @Nullable ErrorMessageHandler errorMessageHandler) {
         if (p2PService.removeData(offerPayloadBase)) {
-            if (resultHandler != null)
+            if (resultHandler != null) {
                 resultHandler.handleResult();
+            }
         } else {
-            if (errorMessageHandler != null)
+            if (errorMessageHandler != null) {
                 errorMessageHandler.handleErrorMessage("Remove offer failed");
+            }
         }
     }
 
     public List<Offer> getOffers() {
         String now = dtf.format(LocalDateTime.now());
-        String marketPriceFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\marketPrice.json", now);
-        try (PrintWriter output = new PrintWriter(FileUtils.openOutputStream(new File(marketPriceFile)))) {
-            output.printf("""
-                {
-                \"timestamp\": %d,
-                \"price\": {
-                    \"%s\": %.8f,
-                    \"%s\": %.8f
-                }
-                """,
-                price.timestampSec,
-                 "USD", priceFeedService.getMarketPrice("USD").price
-                 "XMR", priceFeedService.getMarketPrice("XMR").price
-                 );
+        String[] currencies = {"USD", "XMR"};
+        MarketPrices.Builder marketPrices = MarketPrices.newBuilder();
+        for (String currency : currencies) {
+            MarketPrice mp = priceFeedService.getMarketPrice(currency);
+            if (mp != null)
+            marketPrices.addMps(MarketPricePb.newBuilder()
+                    .setPrice(mp.price)
+                    .setCurrencyCode(mp.currencyCode)
+                    .setTimestamp(mp.timestampSec));
+        }
+
+        String marketPriceFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\marketPrice.pb", now);
+        try (FileOutputStream output = FileUtils.openOutputStream(new File(marketPriceFile))) {
+            marketPrices.build().writeTo(output);
         } catch (Exception e) {
             System.err.printf("~~~ Failed to save market price proto to '%s': %s\n\n", marketPriceFile, e);
         }
 
         return p2PService
-            .getDataMap()
-            .values()
-            .stream()
-            .filter(data -> data.getProtectedStoragePayload() instanceof OfferPayloadBase)
-            .map(data -> {
-                OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
-                Offer offer = new Offer(offerPayloadBase);
-                offer.setPriceFeedService(priceFeedService);
-                String offerFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb", now, offer.getId());
-                try (FileOutputStream output = FileUtils.openOutputStream(new File(offerFile))) {
-                    // output.write(ProtoUtils.util.JsonFormat.printer().print(offer.toProtoMessage()));
-                    // System.out.printf("proto message (((%s)))\n\n\n", offer.toProtoMessage());
-                    offer.toProtoMessage().writeTo(output);
-                } catch (Exception e) {
-                    System.err.printf("~~~ Failed to save offer proto to '%s': %s\n\n", offerFile, e);
-                }
-                return offer;
-            })
-            .collect(Collectors.toList());
+                .getDataMap()
+                .values()
+                .stream()
+                .filter(data -> data.getProtectedStoragePayload() instanceof OfferPayloadBase)
+                .map(data -> {
+                    OfferPayloadBase offerPayloadBase = (OfferPayloadBase) data.getProtectedStoragePayload();
+                    Offer offer = new Offer(offerPayloadBase);
+                    offer.setPriceFeedService(priceFeedService);
+                    String offerFile = String.format("C:\\Users\\MOthe\\Out Of Drive\\bisq-log\\%s\\%s.pb", now, offer.getId());
+                    try (FileOutputStream output = FileUtils.openOutputStream(new File(offerFile))) {
+                        // output.write(ProtoUtils.util.JsonFormat.printer().print(offer.toProtoMessage()));
+                        // System.out.printf("proto message (((%s)))\n\n\n", offer.toProtoMessage());
+                        offer.toProtoMessage().writeTo(output);
+                    } catch (Exception e) {
+                        System.err.printf("~~~ Failed to save offer proto to '%s': %s\n\n", offerFile, e);
+                    }
+                    return offer;
+                })
+                .collect(Collectors.toList());
     }
 
     public void removeOfferAtShutDown(OfferPayloadBase offerPayloadBase) {
@@ -253,14 +258,12 @@ public class OfferBookService {
         offerBookChangedListeners.add(offerBookChangedListener);
     }
 
-
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Private
     ///////////////////////////////////////////////////////////////////////////////////////////
-
     private void doDumpStatistics() {
-        // We filter the case that it is a MarketBasedPrice but the price is not available
-        // That should only be possible if the price feed provider is not available
+        // We filter the case that it is a MarketBasedPrice but the mp is not available
+        // That should only be possible if the mp feed provider is not available
         final List<OfferForJson> offerForJsonList = getOffers().stream()
                 .filter(offer -> !offer.isUseMarketBasedPrice() || priceFeedService.getMarketPrice(offer.getCurrencyCode()) != null)
                 .map(offer -> {

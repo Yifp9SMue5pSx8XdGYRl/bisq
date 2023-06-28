@@ -5,7 +5,7 @@
 </p>
 
 <h3 align="center">
-    
+
 ![Actions Status](https://github.com/bisq-network/bisq/workflows/Build%20Bisq/badge.svg)
 
 
@@ -24,3 +24,13 @@ Follow the step-by-step instructions at https://bisq.network/get-started.
 ## Contribute to Bisq
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer docs](docs/README.md).
+
+# My Windows
+
+## Build
+
+`gradlew.bat build`
+
+## Run
+
+`bisq-desktop.bat`
